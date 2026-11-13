@@ -1,0 +1,16 @@
+build/
+build_*/
+out/
+.vs/
+*.dll
+*.exp
+*.lib
+*.obj
+*.pdb
+*.ilk
+Testing/
+# Local agentic-development notes (not tracked)
+DEVELOPMENT_PLAN.md
+__pycache__/
+.pytest_cache/
+*.pyc

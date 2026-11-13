@@ -1,0 +1,10 @@
+EyesWebTD @EyesWebTD_CHOP_VERSION@
+
+Built for: @EW_TD_BUILT_FOR@
+The operators need a TouchDesigner whose C++ CHOP API is the one above or newer (the plugin refuses to load otherwise).
+
+Install: copy the DLLs of the Plugins folder into the Plugins folder of your project, or into
+%USERPROFILE%\Documents\Derivative\Plugins (directly, not in subfolders: TouchDesigner does not load those), then restart
+TouchDesigner. The operators appear in the OP Create dialog
+(Custom tab) with the labels "EW L1 ...", "EW L2 ...", "EW L3 ...", "EW L4 ...", "EW AP ...".
+The palette builder (palette\build_palette.py) is described in palette\README.md.

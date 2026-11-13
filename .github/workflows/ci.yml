@@ -1,0 +1,89 @@
+name: CI
+
+# Builds all the operators in Release, runs the base-layer tests, the mock-host tests, the package checks and the parity
+# tests against PyEyesWeb, and uploads the package. The workspace has the layout of the lab machines:
+#   work/EyesWebTD   this repository
+#   work/EyesWebCore the C++ core (also builds the Python module that PyEyesWeb needs)
+#   work/PyEyesWeb   the Python package (parity tests)
+# EyesWebCore and PyEyesWeb are checked out with the secret CHECKOUT_TOKEN (a token that can read them).
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # the release step attaches the package to the release of a tag
+
+jobs:
+  build-test:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: work/EyesWebTD
+      - uses: actions/checkout@v4
+        with:
+          repository: InfoMusCP/EyesWebCore
+          token: ${{ secrets.CHECKOUT_TOKEN }}
+          path: work/EyesWebCore
+      - uses: actions/checkout@v4
+        with:
+          repository: InfoMusCP/PyEyesWeb
+          token: ${{ secrets.CHECKOUT_TOKEN }}
+          path: work/PyEyesWeb
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"   # the Python that TouchDesigner 2025.x bundles: the core module is built for it
+      - name: Python tools
+        run: python -m pip install numpy pytest nanobind scipy
+
+      - name: Check that the tag matches VERSION
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          [ "v$(cat work/EyesWebTD/VERSION)" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != VERSION $(cat work/EyesWebTD/VERSION)"; exit 1; }
+
+      - name: Build the core Python module (for the parity tests)
+        shell: bash
+        run: |
+          cd work/EyesWebCore
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DEW_BUILD_PYTHON=ON "-Dnanobind_DIR=$(python -m nanobind --cmake_dir)"
+          cmake --build build --config Release --parallel
+
+      - name: Build the operators
+        shell: bash
+        run: |
+          cd work
+          cmake -S EyesWebTD -B build -G "Visual Studio 17 2022" -A x64
+          cmake --build build --config Release --parallel
+
+      - name: Base-layer tests
+        run: work\build\Release\ew_td_tests.exe
+
+      - name: Host, package and parity tests
+        shell: bash
+        env:
+          EW_TD_PLUGINS: ${{ github.workspace }}/work/build/Plugins/EyesWeb
+        run: python -m pytest work/EyesWebTD/tests -q
+
+      - name: Package
+        shell: bash
+        run: |
+          cd work/build
+          cpack -C Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EyesWebTD-package
+          path: work/build/EyesWebTD-*-win64.zip
+
+      - name: Attach the package to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" work/build/EyesWebTD-*-win64.zip --repo "${GITHUB_REPOSITORY}" --title "EyesWebTD ${GITHUB_REF_NAME}" --notes-file work/EyesWebTD/CHANGELOG.md
