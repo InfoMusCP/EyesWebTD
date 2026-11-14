@@ -26,7 +26,7 @@ public:
 
     void declareParameters(Params& p) override {
         p.page("Kinetic Energy");
-        p.menu("Inputmode", "Input Mode", "velocity", {{"velocity", "Velocity (PyEyesWeb)"}, {"position", "Positions (EyesWeb)"}});
+        p.menu("Inputmode", "Input Mode", "position", {{"position", "Positions"}, {"velocity", "Velocities"}});  // PyEyesWeb's default
         p.integer("Dims", "Dims", 3, Range::between(1, 4));
         p.number("Weight", "Weight (mass)", 1.0, Range::atLeast(0, 10));
         p.string("Weights", "Weights per joint (e.g. 1 2 0.5; empty = Weight for all)", "");

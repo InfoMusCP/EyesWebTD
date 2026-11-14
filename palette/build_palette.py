@@ -27,15 +27,16 @@ LAYERS = [
 PRESETS = {
     "pose_to_kinetic_energy": (
         "Connect a joint-major position CHOP (x, y, z per joint, e.g. the 99 channels of the MediaPipe pose) to 'pose'.",
-        [("pose", "null", {}), ("energy", "Ewkineticenergy", {"Dims": 3})],
+        [("pose", "null", {}), ("energy", "Ewkineticenergy", {"Dims": 3, "Inputmode": "position"})],
     ),
     "pose_to_gesture_segmentation": (
         "Kinetic energy of the pose, then Gesture Segmenter on it (intensity input).",
-        [("pose", "null", {}), ("energy", "Ewkineticenergy", {"Dims": 3}), ("segmenter", "Ewgesturesegmenter", {})],
+        [("pose", "null", {}), ("energy", "Ewkineticenergy", {"Dims": 3, "Inputmode": "position"}),
+         ("segmenter", "Ewgesturesegmenter", {})],
     ),
-    "joint_to_suddenness": (
+    "joint_to_kinematics": (
         "Connect ONE joint (3 channels) to 'joint': the operators take a single trajectory. Use a Select CHOP to pick it.",
-        [("joint", "null", {}), ("suddenness", "Ewsuddenness", {"Dims": 3})],
+        [("joint", "null", {}), ("kinematics", "Ewkinematics", {})],
     ),
 }
 

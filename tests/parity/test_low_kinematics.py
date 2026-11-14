@@ -716,6 +716,7 @@ def test_kinetic_energy_weights_and_reference_joint(plugin):
                             input_mode="position", sampling_rate=50.0)
     assert_close(clip(node, data, 50.0).data[:, 0], feature.run(frames).kinetic_energy, what="weights and reference")
     bad = plugin("KineticEnergy")                       # a velocity has no origin
+    bad.set("Inputmode", "velocity")
     bad.set("Referencepoint", 0)
     assert clip(bad, data, 50.0).status_name == "INVALID_INPUT"
 
