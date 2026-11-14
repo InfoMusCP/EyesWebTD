@@ -21,7 +21,7 @@ CHANNELS = {
     "Ewbinarypulsesregularity": 1, "Ewscalarpeakdetector": 1, "Ewsampleentropy": 1, "Ewmultiscaleentropy": 2,
     "Ewperiodicity": 1, "Ewrarity": 2, "Ewgesturesegmenter": 1, "Ewensembledominance": 3, "Ewhitcelldetector": 2,
     "Ewphaselockingvalue": 2, "Eweventsynchronization": 2, "Eweventsynchronizationmecs": 4,
-    "Ewpartialrecurrencesynchronization": 3, "Ewcontourcurvature": 2, "Ewbodypartsfromcurvature": 2,
+    "Ewpartialrecurrencesynchronization": 3, "Ewcontourcurvature": 2, "Ewbodypartsfromcurvature": 3,
     "Ewkineticenergy": 9, "Ewsymmetry": 15, "Ewpointsdensity": 9, "Ewboundingboxfilledarea": 12,
     "Ewellipsoidsphericity": 9, "Ewequilibrium": 9, "Ewtrianglesymmetry": 6, "Ewdirectness": 3,
     "Ewspectralarclength": 1, "Ewlogdimensionlessjerk": 1, "Ewsubmovementcount": 1,
