@@ -2,8 +2,8 @@
 // Hierarchical centroids of a human silhouette: centre of gravity, head, shoulders, elbows, forearms, hands, knees, feet.
 //
 // Input: a TOP holding the silhouette (any non-zero pixel is body, see Threshold). The TOP is the wired input 0 when it
-//   is a TOP, otherwise the TOP named by the Top parameter. The image is read as TouchDesigner gives it (Mono32Float,
-//   verticalFlip), so rows run from the TOP of the image downwards as in PyEyesWeb: x to the right, y downward, in
+//   is a TOP, otherwise the TOP named by the Top parameter. The image is read as TouchDesigner gives it (one 8-bit channel,
+//   first row on top), so rows run from the TOP of the image downwards as in PyEyesWeb: x to the right, y downward, in
 //   pixels of the frame. A colour TOP is read through its red channel: feed it a grayscale mask.
 // Output: one sample, 56 channels (the PyEyesWeb flat names, labels in the order of PyEyesWeb):
 //   centroids_<label>_x, centroids_<label>_y     pixel coordinates in the frame (whole pixels)
@@ -27,6 +27,7 @@
 #include "ew/features/imaging/centroids_calc.h"
 #include "ew_td/buffer_chop.h"
 #include "ew_td/plugin.h"
+#include "ew_td/top_mask.h"
 #include "ew_td/slot.h"
 
 using namespace TD;
@@ -34,32 +35,6 @@ using namespace ew_td;
 using ew::imaging::CentroidsCalc;
 
 namespace {
-
-// The TOP the operator reads: wired input 0 when it holds a TOP, otherwise the TOP of the Top parameter.
-const OP_TOPInput* topOf(const OP_Inputs* in) {
-    const OP_TOPInput* top = in->getNumInputs() > 0 ? in->getInputTOP(0) : nullptr;
-    return top ? top : in->getParTOP("Top");
-}
-
-// The silhouette as a 0 / 255 mask, first row on top: the pixels of the TOP above `threshold` (red channel).
-ew::Image readMask(const OP_Inputs* in, double threshold) {
-    const OP_TOPInput* top = topOf(in);
-    require(top != nullptr, "no TOP: set the Top parameter (or wire a TOP) to the silhouette");
-    OP_TOPInputDownloadOptions options;
-    options.verticalFlip = true;
-    options.pixelFormat = OP_PixelFormat::Mono32Float;
-    OP_SmartRef<OP_TOPDownloadResult> result = top->downloadTexture(options, nullptr);
-    require(static_cast<bool>(result), "the TOP could not be read");
-    const OP_TextureDesc& desc = result->textureDesc;
-    const int width = static_cast<int>(desc.width), height = static_cast<int>(desc.height);
-    require(desc.texDim == OP_TexDim::e2D && width > 0 && height > 0, "the TOP is not a 2D image");
-    const float* pixels = static_cast<const float*>(result->getData());
-    require(pixels != nullptr && result->size >= static_cast<uint64_t>(width) * height * sizeof(float), "the TOP has no pixel data");
-    ew::Image mask(width, height, 1, 0);
-    const float limit = static_cast<float>(threshold);
-    for (size_t i = 0; i < mask.data.size(); ++i) mask.data[i] = pixels[i] > limit ? 255 : 0;
-    return mask;
-}
 
 std::string channelLabel(int slot) {
     const std::string label = CentroidsCalc::centroidLabel(static_cast<CentroidsCalc::Centroid>(slot));
@@ -102,7 +77,7 @@ public:
     }
 
     void process(CHOP_Output* out, const OP_Inputs* in) override {
-        const ew::Image mask = readMask(in, in->getParDouble("Threshold"));
+        const TopMask mask(in, in->getParDouble("Threshold"));
         const ew::Blob2D blob = ew::blobFromMask(mask.view());
 
         CentroidsCalc::Params params;

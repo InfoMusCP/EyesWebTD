@@ -2,7 +2,7 @@
 // Head, trunk, arms and legs of a human silhouette, from its projection histograms.
 //
 // Input: a TOP holding the silhouette (any non-zero pixel is body, see Threshold). The TOP is the wired input 0 when it
-//   is a TOP, otherwise the TOP named by the Top parameter. Read as TouchDesigner gives it (Mono32Float, verticalFlip):
+//   is a TOP, otherwise the TOP named by the Top parameter. Read as TouchDesigner gives it (one 8-bit channel, first row on top; see ew_td/top_mask.h):
 //   rows from the TOP of the image downwards, x to the right, y downward, in pixels of the frame, as in PyEyesWeb. A
 //   colour TOP is read through its red channel: feed it a grayscale mask.
 // Output: one sample, 30 channels (the PyEyesWeb flat names, parts in the order left_leg, right_leg, trunk, left_arm,
@@ -26,37 +26,13 @@
 #include "ew/features/imaging/blob_sub_regions.h"
 #include "ew_td/chop_base.h"
 #include "ew_td/plugin.h"
+#include "ew_td/top_mask.h"
 
 using namespace TD;
 using namespace ew_td;
 using ew::imaging::BlobSubRegions;
 
 namespace {
-
-const OP_TOPInput* topOf(const OP_Inputs* in) {
-    const OP_TOPInput* top = in->getNumInputs() > 0 ? in->getInputTOP(0) : nullptr;
-    return top ? top : in->getParTOP("Top");
-}
-
-// The silhouette as a 0 / 255 mask, first row on top: the pixels of the TOP above `threshold` (red channel).
-ew::Image readMask(const OP_Inputs* in, double threshold) {
-    const OP_TOPInput* top = topOf(in);
-    require(top != nullptr, "no TOP: set the Top parameter (or wire a TOP) to the silhouette");
-    OP_TOPInputDownloadOptions options;
-    options.verticalFlip = true;
-    options.pixelFormat = OP_PixelFormat::Mono32Float;
-    OP_SmartRef<OP_TOPDownloadResult> result = top->downloadTexture(options, nullptr);
-    require(static_cast<bool>(result), "the TOP could not be read");
-    const OP_TextureDesc& desc = result->textureDesc;
-    const int width = static_cast<int>(desc.width), height = static_cast<int>(desc.height);
-    require(desc.texDim == OP_TexDim::e2D && width > 0 && height > 0, "the TOP is not a 2D image");
-    const float* pixels = static_cast<const float*>(result->getData());
-    require(pixels != nullptr && result->size >= static_cast<uint64_t>(width) * height * sizeof(float), "the TOP has no pixel data");
-    ew::Image mask(width, height, 1, 0);
-    const float limit = static_cast<float>(threshold);
-    for (size_t i = 0; i < mask.data.size(); ++i) mask.data[i] = pixels[i] > limit ? 255 : 0;
-    return mask;
-}
 
 constexpr int kPartCount = 6;
 
@@ -96,7 +72,7 @@ public:
     }
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
-        const ew::Image mask = readMask(in, in->getParDouble("Threshold"));
+        const TopMask mask(in, in->getParDouble("Threshold"));
         const ew::Blob2D blob = ew::blobFromMask(mask.view());
         if (blob.mask.empty()) {
             setStatus(Status::InvalidInput, "no foreground pixels in the silhouette");
