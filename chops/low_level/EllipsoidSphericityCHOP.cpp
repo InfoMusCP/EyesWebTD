@@ -8,6 +8,7 @@
 #include <vector>
 #include "ew/features/motion/ellipsoid_sphericity.h"
 #include "ew_td/plugin.h"
+#include "ew_td/sample_chop.h"
 
 using namespace TD;
 using namespace ew_td;
@@ -17,7 +18,7 @@ namespace {
 bool pointMode(const OP_Inputs* in) { return std::strcmp(in->getParString("Inputmode"), "points") == 0; }
 }  // namespace
 
-class EllipsoidSphericityCHOP : public EwChop {
+class EllipsoidSphericityCHOP : public EwSampleChop {
 public:
     explicit EllipsoidSphericityCHOP(const OP_NodeInfo*) {}
 
@@ -25,7 +26,6 @@ public:
         if (!pointMode(in)) return {Output::scalar("sphericity")};
         return {Output::scalar("sphericity"), Output::scalar("axis_ratio"), Output::indexed("radii", 3)};
     }
-    int numSamples(const OP_Inputs* in) const override { return inputSamples(in); }
 
     void declareParameters(Params& p) override {
         p.page("Ellipsoid Sphericity");
@@ -34,6 +34,7 @@ public:
     }
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
+        if (!checkSlice(out, in)) return;
         const InputView input = chopInput(in);
         if (pointMode(in)) {
             require(input.channels() % 3 == 0, "Points input requires channels multiple of 3 (x, y, z triplets)");

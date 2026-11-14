@@ -6,17 +6,17 @@
 #include <vector>
 #include "ew/features/motion/bounding_box_filled_area.h"
 #include "ew_td/plugin.h"
+#include "ew_td/sample_chop.h"
 
 using namespace TD;
 using namespace ew_td;
 using ew::motion::BoundingBoxFilledArea;
 
-class BoundingBoxFilledAreaCHOP : public EwChop {
+class BoundingBoxFilledAreaCHOP : public EwSampleChop {
 public:
     explicit BoundingBoxFilledAreaCHOP(const OP_NodeInfo*) {}
 
     Schema schema(const OP_Inputs*) const override { return {Output::scalar("contraction_index")}; }
-    int numSamples(const OP_Inputs* in) const override { return inputSamples(in); }
 
     void declareParameters(Params& p) override {
         p.page("Bounding Box");
@@ -24,6 +24,7 @@ public:
     }
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
+        if (!checkSlice(out, in)) return;
         const InputView input = chopInput(in);
         require(input.channels() % 3 == 0, "Input channel count must be a multiple of 3 (x, y, z triplets)");
         const int points = input.channels() / 3;

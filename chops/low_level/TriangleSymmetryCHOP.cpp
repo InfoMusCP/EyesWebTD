@@ -10,6 +10,7 @@
 #include <cstring>
 #include "ew/features/motion/triangle_symmetry_index.h"
 #include "ew_td/plugin.h"
+#include "ew_td/sample_chop.h"
 
 using namespace TD;
 using namespace ew_td;
@@ -40,7 +41,7 @@ const MethodInfo& method(const OP_Inputs* in) {
 }
 }  // namespace
 
-class TriangleSymmetryCHOP : public EwChop {
+class TriangleSymmetryCHOP : public EwSampleChop {
 public:
     explicit TriangleSymmetryCHOP(const OP_NodeInfo*) {}
 
@@ -53,9 +54,9 @@ public:
                 {kMethods[2].token, kMethods[2].label}, {kMethods[3].token, kMethods[3].label}});
     }
 
-    int numSamples(const OP_Inputs* in) const override { return inputSamples(in); }
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
+        if (!checkSlice(out, in)) return;
         const InputView input = chopInput(in);
         requireFinite(input);
         require(input.channels() >= 6, "TriangleSymmetry requires at least 6 channels: ux, uy, lx, ly, rx, ry");

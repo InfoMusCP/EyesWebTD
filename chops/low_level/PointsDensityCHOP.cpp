@@ -8,6 +8,7 @@
 #include <vector>
 #include "ew/features/motion/points_density.h"
 #include "ew_td/plugin.h"
+#include "ew_td/sample_chop.h"
 
 using namespace TD;
 using namespace ew_td;
@@ -17,7 +18,7 @@ namespace {
 bool perAxis(const OP_Inputs* in) { return std::strcmp(in->getParString("Outputdims"), "components") == 0; }
 }  // namespace
 
-class PointsDensityCHOP : public EwChop {
+class PointsDensityCHOP : public EwSampleChop {
 public:
     explicit PointsDensityCHOP(const OP_NodeInfo*) {}
 
@@ -25,7 +26,6 @@ public:
         const std::vector<std::string> xyz{"x", "y", "z"};
         return {Output::vector("centroid", xyz), perAxis(in) ? Output::vector("density", xyz) : Output::scalar("density")};
     }
-    int numSamples(const OP_Inputs* in) const override { return inputSamples(in); }
 
     void declareParameters(Params& p) override {
         p.page("Points Density");
@@ -37,6 +37,7 @@ public:
     }
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
+        if (!checkSlice(out, in)) return;
         const InputView input = chopInput(in);
         const int points = jointCount(input, 3);
 

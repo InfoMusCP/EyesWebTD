@@ -7,20 +7,20 @@
 #include "ew/features/space/hit_cell_detector.h"
 #include "ew/math/vec.h"
 #include "ew_td/plugin.h"
+#include "ew_td/sample_chop.h"
 
 using namespace TD;
 using namespace ew_td;
 using ew::Point2;
 using ew::space::HitCellDetector;
 
-class HitCellDetectorCHOP : public EwChop {
+class HitCellDetectorCHOP : public EwSampleChop {
 public:
     explicit HitCellDetectorCHOP(const OP_NodeInfo*) {}
 
     // The cell channels have the names the operator always had: PyEyesWeb has no fixed names for a list of cells.
     Schema schema(const OP_Inputs*) const override { return {Output::scalar("cell_row"), Output::scalar("cell_col")}; }
 
-    int numSamples(const OP_Inputs* in) const override { return inputSamples(in); }
 
     void declareParameters(Params& p) override {
         p.page("Hit Cell Detector");
@@ -36,6 +36,7 @@ public:
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
         for (int c = 0; c < 2; ++c)
             for (int s = 0; s < out->numSamples; ++s) out->channels[c][s] = -1.f;
+        if (!checkSlice(out, in)) return;
 
         const InputView input = chopInput(in);
         if (input.channels() < 2) {

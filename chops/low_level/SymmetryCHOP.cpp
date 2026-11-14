@@ -10,6 +10,7 @@
 #include "ew/features/motion/symmetry.h"
 #include "ew/features/motion/symmetry_index_3d.h"
 #include "ew_td/plugin.h"
+#include "ew_td/sample_chop.h"
 
 using namespace TD;
 using namespace ew_td;
@@ -39,7 +40,7 @@ std::vector<GeometricSymmetry::Pair> parsePairs(const OP_Inputs* in) {
 }
 }  // namespace
 
-class SymmetryCHOP : public EwChop {
+class SymmetryCHOP : public EwSampleChop {
 public:
     explicit SymmetryCHOP(const OP_NodeInfo*) {}
 
@@ -61,7 +62,6 @@ public:
         return schema;
     }
 
-    int numSamples(const OP_Inputs* in) const override { return inputSamples(in); }
 
     void declareParameters(Params& p) override {
         p.page("Symmetry");
@@ -77,6 +77,7 @@ public:
     }
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
+        if (!checkSlice(out, in)) return;
         const InputView input = chopInput(in);
         requireFinite(input);
         int dims = in->getParInt("Dims");

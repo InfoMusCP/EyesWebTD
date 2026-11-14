@@ -5,17 +5,17 @@
 // A sample with coincident feet or NaN / infinity: INVALID_INPUT, its outputs stay 0.
 #include "ew/features/motion/equilibrium.h"
 #include "ew_td/plugin.h"
+#include "ew_td/sample_chop.h"
 
 using namespace TD;
 using namespace ew_td;
 using ew::motion::Equilibrium;
 
-class EquilibriumCHOP : public EwChop {
+class EquilibriumCHOP : public EwSampleChop {
 public:
     explicit EquilibriumCHOP(const OP_NodeInfo*) {}
 
     Schema schema(const OP_Inputs*) const override { return {Output::scalar("equilibrium"), Output::scalar("angle")}; }
-    int numSamples(const OP_Inputs* in) const override { return inputSamples(in); }
 
     void declareParameters(Params& p) override {
         p.page("Equilibrium");
@@ -24,6 +24,7 @@ public:
     }
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
+        if (!checkSlice(out, in)) return;
         const InputView input = chopInput(in);
         require(input.channels() >= 6, "Equilibrium requires at least 6 channels: lf_x, lf_y, rf_x, rf_y, bary_x, bary_y");
 
