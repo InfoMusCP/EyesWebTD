@@ -45,7 +45,7 @@ EW_TD_CHOP(MyCHOP, "Ewmyfeature", "EW L2 My Feature", 1, 1)
 An operator that keeps state between cooks (a feature fed sample after sample) derives from `ew_td::EwStreamChop`
 instead, implements `process` and `dropState`, and holds its core feature in an `ew_td::FeatureSlot`. It gets two
 parameters on a `Cook` page: **Source** (`stream`: a live timeslice, the state stays and the output is a timeslice;
-`clip`: a recording, the state starts afresh at every cook) and **Reset** (pulse). See `GestureSegmenterCHOP.cpp`.
+`clip`: a recording, the state starts afresh at every cook) and **Reset** (pulse). See `KinematicsCHOP.cpp`.
 Every operator has an Info CHOP / DAT with its status, the reason, the shape of the output and, for a stream
 operator, the samples processed and the resets.
 
@@ -75,9 +75,9 @@ Exposed since the review of the library: Symmetry's ratio method (`Method`, `Ind
 `Normalizeskeleton`), DirectionChange's metrics (the `Cosine` and `Polygon` toggles), Rarity's `Bins` and RecurrencePlot's
 threshold for each row (`Rowepsilons`).
 
-## Catalog of Operators (37 CHOPs)
+## Catalog of Operators (36 CHOPs)
 
-The operators of the first release: the 36 features of the PyEyesWeb catalog and `TimeWindowSynchronizer`. The
+The operators of the first release: the 35 features of the PyEyesWeb catalog and `TimeWindowSynchronizer`. The
 operators of the features held back from the release are kept in `chops/_held_back` and are not built.
 
 ### 1. Physical signals (layer 1)
@@ -111,9 +111,7 @@ operators of the features held back from the release are kept in `chops/_held_ba
 | `TriangleSymmetryCHOP.cpp` | `Ewtrianglesymmetry` | EW L2 Triangle Symmetry | 2D upper/left/right vertex asymmetry index |
 
 ### 3. Mid-level features (layer 3)
-| CHOP File | Operator Type | Op Label | Description |
-|---|---|---|---|
-| `GestureSegmenterCHOP.cpp` | `Ewgesturesegmenter` | EW L3 Gesture Segmenter | Gestures from an intensity (kinetic energy), with the duration of each gesture and pause |
+None in the first release: the Gesture Segmenter is held back (`chops/_held_back/mid_level`) until the noise test that belongs to it is finished.
 
 ### 4. High-level features (layer 4)
 | CHOP File | Operator Type | Op Label | Description |

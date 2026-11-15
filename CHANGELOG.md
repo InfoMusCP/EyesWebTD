@@ -6,7 +6,7 @@ parameters.
 
 ## 0.1.0 (unreleased)
 
-First release of the layered operator set: 37 operators, one per feature of the first PyEyesWeb release (36) and
+First release of the layered operator set: 36 operators, one per feature of the first PyEyesWeb release (35) and
 `TimeWindowSynchronizer`, in five layers (physical signals, low-level, mid-level, high-level, analysis primitives).
 
 - Operators are named after the PyEyesWeb features and carry the layer in the label (`EW L2 Kinetic Energy`); channel names

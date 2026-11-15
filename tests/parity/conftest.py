@@ -21,7 +21,7 @@ from ewhost import Chop, Signal  # noqa: E402  (after the path set-up)
 
 
 # Operators of the features held back from the first release (PyEyesWeb `released=False`): not built.
-HELD_BACK = {"Harmonicity", "MotionNoiseDetector", "Suddenness", "SuddennessImpulsivity", "ContractionImpulsivity",
+HELD_BACK = {"GestureSegmenter", "Harmonicity", "MotionNoiseDetector", "Suddenness", "SuddennessImpulsivity", "ContractionImpulsivity",
              "PositionDependingPotentials", "RegionDependingPotentials", "NonlinearInterdependence",
              "SpikeSynchronization"}
 

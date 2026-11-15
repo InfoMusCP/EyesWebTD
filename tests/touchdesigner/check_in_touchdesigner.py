@@ -19,7 +19,7 @@ import td  # noqa: F401  (only available inside TouchDesigner)
 # channels of the noise input; operators not listed take 3 channels (one point x, y, z)
 CHANNELS = {
     "Ewbinarypulsesregularity": 1, "Ewscalarpeakdetector": 1, "Ewsampleentropy": 1, "Ewmultiscaleentropy": 2,
-    "Ewperiodicity": 1, "Ewrarity": 2, "Ewgesturesegmenter": 1, "Ewensembledominance": 3, "Ewhitcelldetector": 2,
+    "Ewperiodicity": 1, "Ewrarity": 2, "Ewensembledominance": 3, "Ewhitcelldetector": 2,
     "Ewphaselockingvalue": 2, "Eweventsynchronization": 2, "Eweventsynchronizationmecs": 4,
     "Ewpartialrecurrencesynchronization": 3, "Ewcontourcurvature": 2, "Ewbodypartsfromcurvature": 3,
     "Ewkineticenergy": 9, "Ewsymmetry": 15, "Ewpointsdensity": 9, "Ewboundingboxfilledarea": 12,

@@ -15,7 +15,7 @@ from data import skeleton
 from pyeyesweb.data_models.recorder import Recorder
 from pyeyesweb.data_models.results import Status
 from pyeyesweb.high_level import EnsembleDominance
-from pyeyesweb.mid_level import GestureSegmenter
+from pyeyesweb.mid_level.segmentation import GestureSegmenter
 from pyeyesweb.mid_level.impulsivity import ContractionImpulsivity  # held back
 from pyeyesweb.mid_level.space_occupation import PositionDependingPotentials, RegionDependingPotentials  # held back
 from pyeyesweb.mid_level.suddenness import Suddenness  # held back
