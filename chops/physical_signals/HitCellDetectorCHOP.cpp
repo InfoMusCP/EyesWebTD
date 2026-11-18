@@ -1,8 +1,9 @@
 // TouchDesigner Hit Cell Detector CHOP - wraps ew::space::HitCellDetector
 // Input: 2 channels (x, y) representing 2D points.
-// Output: 2 channels per input sample (cell_row, cell_col): the row and column of the cell that each point hits, -1 when
-// there is none: every point (status INVALID_INPUT) when Clip is off and a point is outside the area, as the core rejects
-// the whole call, and when the input cannot be read or has a NaN or infinite value.
+// Output: 2 channels (cell_row, cell_col): the row and column of the cell that a point hits. Stream (default): one sample,
+// the cell of the newest point, whatever number of points the live source gives in a frame. Clip: one per input sample.
+// The cell is -1 when there is none: every point (status INVALID_INPUT) when Clip Values is off and a point is outside the
+// area, as the core rejects the whole call, and when the input cannot be read or has a NaN or infinite value.
 #include <vector>
 #include "ew/features/space/hit_cell_detector.h"
 #include "ew/math/vec.h"
@@ -20,6 +21,8 @@ public:
 
     // The cell channels have the names the operator always had: PyEyesWeb has no fixed names for a list of cells.
     Schema schema(const OP_Inputs*) const override { return {Output::scalar("cell_row"), Output::scalar("cell_col")}; }
+
+    bool oneSampleInStream() const override { return true; }
 
 
     void declareParameters(Params& p) override {
@@ -43,7 +46,9 @@ public:
             setStatus(Status::InvalidInput, "Requires at least 2 channels (x, y)");
             return;
         }
-        if (!input.finite()) {
+        require(input.samples() > 0, "the input has no samples");
+        const int first = singleSample(in) ? newestSample(in) : 0;
+        if (first == 0 ? !input.finite() : !input.finite(first)) {
             setStatus(Status::InvalidInput, "input contains NaN or infinity");
             return;
         }
@@ -57,10 +62,12 @@ public:
         p.yMax = in->getParDouble("Ymax");
         p.clipValues = in->getParInt("Clipvalues") != 0;
 
-        std::vector<Point2> points(input.samples());
-        for (int s = 0; s < input.samples(); ++s) {
-            points[s].x = input.at(0, s);
-            points[s].y = input.at(1, s);
+        // Stream: one sample out, the cell of the newest point (a live source gives 1 or 2 points in a frame); Clip: one
+        // cell for every point of the recording.
+        std::vector<Point2> points(input.samples() - first);
+        for (int s = first; s < input.samples(); ++s) {
+            points[s - first].x = input.at(0, s);
+            points[s - first].y = input.at(1, s);
         }
 
         const auto res = HitCellDetector(p).process(points);

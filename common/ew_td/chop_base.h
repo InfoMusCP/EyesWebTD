@@ -122,6 +122,12 @@ protected:
     void warmingUp(int have, int need) {
         setStatus(Status::WarmingUp, std::to_string(have) + " of " + std::to_string(need) + " samples");
     }
+    // For an operator whose input is the window (Directness, Sample Entropy, ...): the input is too short, WARMING_UP with the
+    // advice to feed a window. The operator then returns, leaving its outputs at zero.
+    void windowTooShort(int have, int need) {
+        setStatus(Status::WarmingUp, std::to_string(have) + " of " + std::to_string(need) +
+                                         " samples: feed a window (a Trail CHOP, a File In)");
+    }
     // For a sample-wise operator: true when sample `s` of `input` is not data (NaN or infinity). The cook then reports
     // INVALID_INPUT, leaves the output of that sample at zero and must not feed the sample to its feature, as PyEyesWeb
     // does not.

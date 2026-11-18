@@ -34,7 +34,7 @@ public:
         requireFinite(input);
         require(input.channels() >= 1, "Requires at least 1 input channel (speed profile)");
         if (input.samples() < kMinimumSamples) {
-            setStatus(Status::WarmingUp, std::to_string(input.samples()) + " of " + std::to_string(kMinimumSamples) + " samples");
+            windowTooShort(input.samples(), kMinimumSamples);
             return;
         }
 

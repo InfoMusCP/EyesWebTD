@@ -57,7 +57,7 @@ public:
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
         if (!checkSlice(out, in)) return;
-        const InputView input = chopInput(in);
+        const InputView input = sampleInput(in);
         requireFinite(input);
         require(input.channels() >= 6, "TriangleSymmetry requires at least 6 channels: ux, uy, lx, ly, rx, ry");
         TSI::Params params;

@@ -1,119 +1,88 @@
-// TouchDesigner Rarity CHOP - wraps ew::motion::RarityIndex and ew::motion::HistogramRarity
-// Method "information" (EyesWeb RarityIndex): input N channels, one sample per cook sample; output rarity_<c> per input
-// sample, with the memory kept between cooks. Method "mode_distance" (PyEyesWeb HistogramRarity): the input is the
-// window of each channel; output rarity_<c> x 1 sample, WARMING_UP below 2 samples. Reset forgets the memory of the
-// information method, which reports WARMING_UP until Memory samples were seen (rarity type) and INVALID_INPUT for a
-// value above 1.0 (the bins) or a NaN / infinite sample (skipped, not fed). NaN or infinity in mode_distance: INVALID_INPUT.
-#include <sstream>
+// TouchDesigner Rarity CHOP - wraps ew::motion::NoveltyRarity (PyEyesWeb Rarity, method "novelty").
+// How unusual the movement of the last moments is compared with the movement of the recent past, for ANY signal: a scalar
+// (a speed, an energy), a position, several features. At every sample the last Pattern seconds are a pattern; it is compared
+// with the patterns of the last Memory seconds (the nearest Neighbours of them), and the distance is divided by its own
+// median, so the value is dimensionless: about 1 for a movement as familiar as usual, larger for a movement that has not
+// happened in the memory. A repeated movement becomes familiar; a movement not done for Memory seconds is new again.
+//
+// Input: N channels (any signal; the channels are scaled by their own standard deviation). Output: 1 channel, rarity.
+//   Source = stream (default): one sample, the rarity of the newest sample (a live source gives 1 or 2 samples in a frame;
+//     every sample feeds the memory). Source = clip: one value per input sample.
+//   Compare: values (the pattern as it is: level counts, for scalars) or shape (the newest sample is subtracted from the
+//     pattern: only the shape counts, not where it happens, for positions).
+//   Parameters are in seconds (the sample rate of the input converts them); the points of a pattern are spaced to about 15.
+// Statuses: WARMING_UP until the memory holds twice the pattern length of patterns to compare with (the output is 0); a NaN
+// or infinite sample is skipped (INVALID_INPUT, not used). Reset forgets the memory; so does a change of the number of
+// channels, of the sample rate, of Memory, Pattern, Compare.
+// The two EyesWeb / PyEyesWeb methods of Rarity (a bin of the current level, and the distance from the most common bin) stay
+// in PyEyesWeb: they are blind to a change of shape inside a bin or of amplitude (design review 2026-11-17).
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
-#include "ew/features/motion/histogram_rarity.h"
-#include "ew/features/motion/rarity_index.h"
+#include "ew/features/motion/novelty_rarity.h"
 #include "ew_td/plugin.h"
-#include "ew_td/buffer_chop.h"
 #include "ew_td/slot.h"
+#include "ew_td/stream_chop.h"
 
 using namespace TD;
 using namespace ew_td;
-using ew::motion::HistogramRarity;
-using ew::motion::RarityIndex;
+using ew::motion::NoveltyRarity;
 
-class RarityCHOP : public EwBufferChop {
+class RarityCHOP : public EwStreamChop {
 public:
     explicit RarityCHOP(const OP_NodeInfo*) {}
 
-    Schema schema(const OP_Inputs* in) const override {
-        return {Output::indexed("rarity", in->getNumInputs() ? in->getInputCHOP(0)->numChannels : 1)};
-    }
+    Schema schema(const OP_Inputs*) const override { return {Output::scalar("rarity")}; }
 
-    int numSamples(const OP_Inputs* in) const override {
-        if (!in->getNumInputs()) return 1;
-        return isModeDistance(in) ? 1 : in->getInputCHOP(0)->numSamples;
-    }
-
-    double sampleRate(const OP_Inputs* in) const override {
-        return in->getNumInputs() ? in->getInputCHOP(0)->sampleRate : 60;
-    }
+    bool oneSampleInStream() const override { return true; }
 
     void declareParameters(Params& p) override {
         p.page("Rarity");
-        p.menu("Method", "Method", "information",
-               {{"information", "Information (EyesWeb)"}, {"mode_distance", "Mode Distance (Histogram)"}});
-        p.menu("Measure", "Measure", "rarity", {{"rarity", "Rarity (Time)"}, {"contrast", "Contrast (Space)"}});
-        p.integer("Window", "Window (samples)", 50, Range::atLeast(2, 500));
-        p.string("Bins", "Bin Widths (information, e.g. 0.3 0.3 0.4)", "0.3 0.3 0.4");
-        p.number("Alpha", "Alpha (Histogram Scaling)", 0.5, Range::atLeast(0.0, 10.0));
+        p.number("Memory", "Memory (s)", 5.0, Range::atLeast(0.1, 30.0));
+        p.number("Pattern", "Pattern (s)", 0.5, Range::atLeast(0.02, 5.0));
+        p.integer("Neighbours", "Neighbours", 5, Range::atLeast(1, 50));
+        p.menu("Compare", "Compare", "values", {{"values", "Values (level counts)"}, {"shape", "Shape (position ignored)"}});
     }
 
     void dropState() override {
-        ri_.drop();
-        seen_ = 0;
+        feature_.drop();
+        warmup_ = 0;
     }
 
-    void process(CHOP_Output* out, const OP_Inputs* in) override {
-        const InputView input = chopInput(in);
-        if (isModeDistance(in)) {
-            requireFinite(input);
-            if (input.samples() < 2) setStatus(Status::WarmingUp, "fewer than 2 samples");
-            // HistogramRarity: over the window of samples of each channel
-            HistogramRarity::Params hp;
-            hp.alpha = in->getParDouble("Alpha");
-            HistogramRarity hr(hp);
-            std::vector<double> smp(input.samples());
-            for (int c = 0; c < input.channels() && c < out->numChannels; ++c) {
-                for (int s = 0; s < input.samples(); ++s) smp[s] = input.at(c, s);
-                const auto res = hr.process(smp.data(), smp.size());
-                out->channels[c][0] = res.has_value() ? static_cast<float>(*res) : 0.f;
+    void process(CHOP_Output* out, const OP_Inputs* in, const InputView& input) override {
+        const double rate = input.sampleRate() > 0 ? input.sampleRate() : 60.0;
+        NoveltyRarity::Params p;
+        p.channels = input.channels();
+        p.pattern = std::max(2, static_cast<int>(std::lround(in->getParDouble("Pattern") * rate)));
+        p.memory = std::max(3 * p.pattern, static_cast<int>(std::lround(in->getParDouble("Memory") * rate)));
+        p.step = std::max(1, static_cast<int>(std::lround(p.pattern / 15.0)));
+        p.neighbours = std::max(1, in->getParInt("Neighbours"));
+        p.shape = std::strcmp(in->getParString("Compare"), "shape") == 0;
+        NoveltyRarity& feature = feature_.get(p);
+        warmup_ = static_cast<int>(feature.warmupSamples());
+
+        const bool single = out->numSamples == 1;  // Stream: the newest sample only; Clip: one value per sample (of the clip)
+        std::vector<double> sample(static_cast<size_t>(input.channels()));
+        bool filling = false, skipped = false;
+        for (int s = 0; s < input.samples(); ++s) {
+            if (skipNonFinite(input, s)) {
+                skipped = true;
+                continue;
             }
-        } else {
-            RarityIndex::Params rp;
-            rp.numberOfInputs = input.channels();
-            rp.window = in->getParInt("Window");
-            {   // the widths of the bins, in the units of the signal; a value above their sum is outside the bins
-                std::stringstream list(in->getParString("Bins") ? in->getParString("Bins") : "");
-                std::vector<double> widths;
-                double width;
-                while (list >> width) widths.push_back(width);
-                require(!widths.empty(), "Bin Widths needs at least one width");
-                rp.bins = widths;
-                binsTotal_ = 0;
-                for (double w : widths) binsTotal_ += w;
-            }
-            rp.measure = std::strcmp(in->getParString("Measure"), "contrast") == 0 ? RarityIndex::Type::Contrast
-                                                                                    : RarityIndex::Type::Rarity;
-            RarityIndex& index = ri_.get(rp);
-            std::vector<double> sample(input.channels());
-            if (rp.numberOfInputs != lastInputs_ || rp.window != lastMemory_) seen_ = 0;
-            lastInputs_ = rp.numberOfInputs;
-            lastMemory_ = rp.window;
-            const bool usesMemory = rp.measure == RarityIndex::Type::Rarity;
-            bool outside = false;
-            for (int s = 0; s < input.samples(); ++s) {
-                if (skipNonFinite(input, s)) continue;
-                for (int c = 0; c < input.channels(); ++c) {
-                    sample[c] = input.at(c, s);
-                    if (sample[c] > binsTotal_) outside = true;
-                }
-                const auto res = index.process(sample);
-                if (usesMemory) ++seen_;
-                for (int c = 0; c < input.channels() && c < out->numChannels; ++c) out->channels[c][s] = static_cast<float>(res[c]);
-            }
-            if (outside) setStatus(Status::InvalidInput, "value outside the bins");
-            else if (usesMemory && seen_ < rp.window && status() == Status::Ok)
-                setStatus(Status::WarmingUp, "the memory holds " + std::to_string(seen_) + " of " + std::to_string(rp.window) + " values");
+            for (int c = 0; c < input.channels(); ++c) sample[static_cast<size_t>(c)] = input.at(c, s);
+            const auto rarity = feature.process(sample.data());
+            filling = !rarity;
+            const int slot = single ? 0 : s;
+            if (slot < out->numSamples) out->channels[0][slot] = rarity ? static_cast<float>(*rarity) : 0.f;
         }
+        if (filling && !skipped) setStatus(Status::WarmingUp, "the memory is filling (" + std::to_string(warmup_) + " samples before the first value)");
     }
 
 private:
-    static bool isModeDistance(const OP_Inputs* in) { return std::strcmp(in->getParString("Method"), "mode_distance") == 0; }
-
-    double binsTotal_ = 1.0;  // the sum of the bin widths (default 0.3 + 0.3 + 0.4)
-
-    FeatureSlot<RarityIndex> ri_;
-    int seen_ = 0;
-    int lastInputs_ = 0;
-    int lastMemory_ = 0;
+    FeatureSlot<NoveltyRarity> feature_;
+    int warmup_ = 0;
 };
 
 EW_TD_CHOP(RarityCHOP, "Ewrarity", "EW AP Rarity", 1, 1)

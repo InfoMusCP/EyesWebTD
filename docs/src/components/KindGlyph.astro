@@ -1,0 +1,42 @@
+---
+// A small picture of how an operator kind turns input samples into output samples within one cook.
+import type { Kind } from '../data/types';
+interface Props { kind: Kind; color?: string }
+const { kind, color = '#a8bf86' } = Astro.props;
+const inN = 7;
+const many = kind === 'sample' || kind === 'stream';
+const state = kind === 'stream' || kind === 'buffer';
+---
+<svg viewBox="0 0 300 120" width="300" role="img" aria-label={`${kind} operator`}>
+  <text x="10" y="16" font-size="10" fill="#6b7385" font-family="JetBrains Mono, monospace">input samples</text>
+  <text x="290" y="16" text-anchor="end" font-size="10" fill="#6b7385" font-family="JetBrains Mono, monospace">output</text>
+  {kind === 'frame' && <rect x="6" y="28" width="112" height="44" rx="8" fill="none" stroke="#343a48" stroke-dasharray="4 3" />}
+  {Array.from({ length: inN }).map((_, i) => (
+    <rect x={14 + i * 14.5} y={50 - (8 + ((i * 37) % 19))} width="8" height={8 + ((i * 37) % 19)} rx="2" fill="#86a68c" opacity={0.55 + i * 0.06} />
+  ))}
+  <line x1="118" y1="50" x2="132" y2="50" stroke="#4a5266" stroke-width="2" />
+  <rect x="132" y="30" width="44" height="40" rx="9" fill="#14171e" stroke={color} />
+  {state ? (
+    <g>
+      <path d="M146 44 a8 8 0 1 1 0 12" fill="none" stroke={color} stroke-width="2" />
+      <path d="M143 53 l3 4 l4 -3" fill="none" stroke={color} stroke-width="2" />
+      <text x="154" y="90" text-anchor="middle" font-size="9.5" fill={color} font-family="JetBrains Mono, monospace">keeps state</text>
+    </g>
+  ) : (
+    <text x="154" y="54" text-anchor="middle" font-size="10" fill={color} font-family="JetBrains Mono, monospace">f(x)</text>
+  )}
+  <line x1="176" y1="50" x2="190" y2="50" stroke="#4a5266" stroke-width="2" />
+  {many ? (
+    Array.from({ length: inN }).map((_, i) => (
+      <rect x={196 + i * 13} y={50 - (6 + ((i * 53) % 17))} width="7" height={6 + ((i * 53) % 17)} rx="2" fill={color} opacity={0.6 + i * 0.05} />
+    ))
+  ) : (
+    <g>
+      <rect x="230" y="30" width="16" height="20" rx="3" fill={color} />
+      <text x="238" y="66" text-anchor="middle" font-size="9.5" fill="#9aa3b4" font-family="JetBrains Mono, monospace">1 result</text>
+    </g>
+  )}
+  {kind === 'frame' && <text x="62" y="90" text-anchor="middle" font-size="9.5" fill="#9aa3b4" font-family="JetBrains Mono, monospace">one window</text>}
+  {many && <text x="240" y="90" text-anchor="middle" font-size="9.5" fill="#9aa3b4" font-family="JetBrains Mono, monospace">1 per input sample</text>}
+  <text x="150" y="112" text-anchor="middle" font-size="9" fill="#4a5266" font-family="JetBrains Mono, monospace">— one cook —</text>
+</svg>

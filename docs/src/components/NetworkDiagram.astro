@@ -1,0 +1,83 @@
+---
+// A TouchDesigner-like network drawn from chains of node labels.
+// A label is "Name Family — note"; nodes with the same exact string are the same node.
+// "EW <Title>" nodes link to the operator page of that title.
+import { operators } from '../data/index';
+
+interface Props { chains: string[][]; current?: string; caption?: string }
+const { chains, current, caption } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+
+const layerColor: Record<string, string> = { L1: '#7fb3c4', L2: '#a8bf86', L3: '#9895c4', L4: '#c08ba6', AP: '#cfa66e' };
+const famColor: Record<string, string> = { CHOP: '#86a68c', TOP: '#a28ec0', SOP: '#4fa3ff', DAT: '#c4917a', COMP: '#9aa3b4' };
+
+type Node = { key: string; name: string; note: string; family: string; color: string; href?: string; col: number; row: number; isCurrent: boolean };
+const nodes = new Map<string, Node>();
+const edges: [string, string][] = [];
+for (const chain of chains) {
+  chain.forEach((key, i) => {
+    if (!nodes.has(key)) {
+      const [nameRaw, note = ''] = key.split(' — ');
+      const name = nameRaw.trim();
+      let family = name.split(' ').pop() ?? '';
+      let color = famColor[family] ?? '#9aa3b4';
+      let href: string | undefined;
+      let isCurrent = false;
+      if (name.startsWith('EW ')) {
+        const op = operators.find((o) => o.title === name.slice(3));
+        family = op ? `EW ${op.layer}` : 'EW';
+        color = op ? layerColor[op.layer] : '#a8bf86';
+        if (op) { href = `${base}operators/${op.slug}`; isCurrent = op.slug === current; }
+      }
+      nodes.set(key, { key, name, note: note.trim(), family, color, href, col: 0, row: 0, isCurrent });
+    }
+    if (i > 0) edges.push([chain[i - 1], key]);
+  });
+}
+// column = longest path from a source
+for (let pass = 0; pass < nodes.size; pass++) {
+  let changed = false;
+  for (const [a, b] of edges) {
+    const na = nodes.get(a)!, nb = nodes.get(b)!;
+    if (nb.col < na.col + 1) { nb.col = na.col + 1; changed = true; }
+  }
+  if (!changed) break;
+}
+const rows = new Map<number, number>();
+for (const n of nodes.values()) { n.row = rows.get(n.col) ?? 0; rows.set(n.col, n.row + 1); }
+
+const NW = 158, NH = 58, CG = 42, RG = 26, PAD = 14;
+const cols = Math.max(...[...nodes.values()].map((n) => n.col)) + 1;
+const maxRows = Math.max(...rows.values());
+const W = PAD * 2 + cols * NW + (cols - 1) * CG;
+const H = PAD * 2 + maxRows * NH + (maxRows - 1) * RG;
+const pos = (n: Node) => ({ x: PAD + n.col * (NW + CG), y: PAD + n.row * (NH + RG) });
+const clip = (s: string, k: number) => (s.length > k ? s.slice(0, k - 1) + '…' : s);
+const label = (n: Node) => n.name.replace(/^EW /, '').replace(/ (CHOP|TOP|SOP|DAT|COMP)$/, '');
+---
+<figure class="diagram" style="margin:0">
+  <svg viewBox={`0 0 ${W} ${H}`} width={W} role="img" aria-label="Example network">
+    {edges.map(([a, b]) => {
+      const pa = pos(nodes.get(a)!), pb = pos(nodes.get(b)!);
+      const x1 = pa.x + NW, y1 = pa.y + NH / 2, x2 = pb.x, y2 = pb.y + NH / 2, dx = (x2 - x1) / 2;
+      return <path d={`M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`} fill="none" stroke="#4a5266" stroke-width="2" />;
+    })}
+    {[...nodes.values()].map((n) => {
+      const { x, y } = pos(n);
+      const body = (
+        <g>
+          {n.isCurrent && <rect x={x - 3} y={y - 3} width={NW + 6} height={NH + 6} rx="12" fill="none" stroke={n.color} stroke-width="1.5" stroke-dasharray="3 3" />}
+          <rect x={x} y={y} width={NW} height={NH} rx="9" fill={n.isCurrent ? '#1d222c' : '#14171e'} stroke={n.family.startsWith('EW') ? n.color : '#343a48'} stroke-opacity={n.family.startsWith('EW') ? 0.8 : 1} />
+          <rect x={x} y={y} width="5" height={NH} rx="2" fill={n.color} />
+          <text x={x + 14} y={y + 18} font-size="9.5" fill={n.color} font-family="JetBrains Mono, monospace" font-weight="700">{n.family}</text>
+          <text x={x + 14} y={y + 35} font-size="12.5" fill="#e9ecf2" font-family="Space Grotesk, sans-serif" font-weight="600">{clip(label(n), 20)}</text>
+          {n.note && <text x={x + 14} y={y + 50} font-size="10" fill="#8a93a6" font-family="JetBrains Mono, monospace">{clip(n.note, 22)}</text>}
+          <circle cx={x} cy={y + NH / 2} r="3.2" fill="#0a0b0e" stroke="#6b7385" />
+          <circle cx={x + NW} cy={y + NH / 2} r="3.2" fill="#0a0b0e" stroke="#6b7385" />
+        </g>
+      );
+      return n.href && !n.isCurrent ? <a href={n.href}>{body}</a> : body;
+    })}
+  </svg>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>

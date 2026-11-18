@@ -21,13 +21,12 @@ CHANNELS = {
     "Ewbinarypulsesregularity": 1, "Ewscalarpeakdetector": 1, "Ewsampleentropy": 1, "Ewmultiscaleentropy": 2,
     "Ewperiodicity": 1, "Ewrarity": 2, "Ewensembledominance": 3, "Ewhitcelldetector": 2,
     "Ewphaselockingvalue": 2, "Eweventsynchronization": 2, "Eweventsynchronizationmecs": 4,
-    "Ewpartialrecurrencesynchronization": 3, "Ewcontourcurvature": 2, "Ewbodypartsfromcurvature": 3,
     "Ewkineticenergy": 9, "Ewsymmetry": 15, "Ewpointsdensity": 9, "Ewboundingboxfilledarea": 12,
     "Ewellipsoidsphericity": 9, "Ewequilibrium": 9, "Ewtrianglesymmetry": 6, "Ewdirectness": 3,
     "Ewspectralarclength": 1, "Ewlogdimensionlessjerk": 1, "Ewsubmovementcount": 1,
 }
-IMAGE_OPERATORS = {"Ewsilhouettecentroids", "Ewsilhouettebodyparts", "Ewvideogram"}
-TWO_INPUTS = {"Ewcrossrecurrenceplot", "Ewtimewindowsynchronizer"}
+IMAGE_OPERATORS = {"Ewsilhouettecentroids", "Ewsilhouettebodyparts"}   # the TOP is their Top parameter (no input)
+TWO_INPUTS = {"Ewtimewindowsynchronizer"}
 SAMPLES = 200
 
 
@@ -82,10 +81,7 @@ def check(operators_txt, parent_path="/project1"):
         try:
             if op_type in IMAGE_OPERATORS:
                 image = box.create(td.noiseTOP, op_type + "_image")
-                if hasattr(node.par, "Top"):
-                    node.par.Top = image.path
-                else:
-                    image.outputConnectors[0].connect(node)
+                node.par.Top = image.path
             else:
                 source = _noise_chop(box, op_type + "_in", CHANNELS.get(op_type, 3))
                 for index in range(2 if op_type in TWO_INPUTS else 1):

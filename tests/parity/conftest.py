@@ -24,6 +24,9 @@ from ewhost import Chop, Signal  # noqa: E402  (after the path set-up)
 HELD_BACK = {"GestureSegmenter", "Harmonicity", "MotionNoiseDetector", "Suddenness", "SuddennessImpulsivity", "ContractionImpulsivity",
              "PositionDependingPotentials", "RegionDependingPotentials", "NonlinearInterdependence",
              "SpikeSynchronization"}
+# Features of the first release that stay in PyEyesWeb but have no TouchDesigner operator (chops/_held_back).
+HELD_BACK |= {"Videogram", "ContourCurvature", "BodyPartsFromCurvature", "RecurrencePlot", "CrossRecurrencePlot",
+              "PartialRecurrenceSynchronization"}
 
 
 def _plugin_dir() -> Path:
@@ -33,18 +36,27 @@ def _plugin_dir() -> Path:
     return Path(value)
 
 
+# Sample-wise operators: one output per input sample in Clip, the newest sample only in Stream (test_sample_source.py).
+SAMPLE_WISE = {"BoundingBoxFilledArea", "EllipsoidSphericity", "PointsDensity", "Equilibrium", "TriangleSymmetry", "Symmetry"}
+
+
 @pytest.fixture
 def plugin():
-    """plugin("Directness") -> a fresh node of the operator Ew_DirectnessCHOP (state is per node)."""
+    """plugin("Directness") -> a fresh node of the operator Ew_DirectnessCHOP (state is per node).
+
+    The sample-wise operators (SAMPLE_WISE) output only the newest sample in Stream mode; the parity tests compare one value per
+    input sample, so their nodes start in Clip mode. `plugin(name, default=True)` keeps the default Source (stream)."""
     nodes = []
 
-    def make(name: str) -> Chop:
+    def make(name: str, default: bool = False) -> Chop:
         matches = list(_plugin_dir().glob(f"*/Ew_{name}CHOP.dll"))
         if not matches and name in HELD_BACK:
             pytest.skip(f"{name}: held back from the release, its operator is not built (chops/_held_back)")
         assert matches, f"no operator DLL for {name} under {_plugin_dir()}"
         node = Chop(matches[0])
         nodes.append(node)
+        if name in SAMPLE_WISE and not default:
+            node.set("Source", "clip")
         return node
 
     yield make

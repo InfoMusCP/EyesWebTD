@@ -1,0 +1,55 @@
+---
+import Base from '../layouts/Base.astro';
+import NetworkDiagram from '../components/NetworkDiagram.astro';
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+---
+<Base title="Get started" section="start">
+  <header class="op-hero">
+    <span class="eyebrow">Guide</span>
+    <h1>Get started</h1>
+    <p class="tagline">Install the plugins, drop your first operator, read its status. Five minutes.</p>
+  </header>
+
+  <h2><span class="num">01</span>Install</h2>
+  <ol class="recipe">
+    <li>Download <code>EyesWebTD-&lt;version&gt;-win64.zip</code> and unzip it. The DLLs are flat in <code>Plugins/</code> (one DLL per operator).</li>
+    <li>Copy them into <code>Documents/Derivative/Plugins</code> (all projects) or into a <code>Plugins</code> folder next to your <code>.toe</code> (this project only).</li>
+    <li>Restart TouchDesigner. When asked, allow the custom operators to load.</li>
+  </ol>
+  <div class="callout">Windows 64-bit, TouchDesigner 2025.32280 or later. macOS comes later. An old DLL of the same operator in another Plugins folder wins over the new one: remove it.</div>
+
+  <h2><span class="num">02</span>Create an operator</h2>
+  <p>Open the OP Create dialog (<kbd>Tab</kbd>), go to <b>CHOP → Custom</b>: every operator is listed as <code>EW L1 …</code>, <code>EW L2 …</code>, <code>EW L4 …</code> or <code>EW AP …</code>. The prefix is its <a href={`${base}concepts#layers`}>layer</a>.</p>
+  <p>The palette builder (<code>palette/build_palette.py</code>) can also create a container with one instance of each installed operator and a few ready-made presets.</p>
+
+  <h2><span class="num">03</span>Your first network</h2>
+  <p>Kinetic energy from a pose: the quickest way to see the body's activity as a single number.</p>
+  <NetworkDiagram chains={[['MediaPipe COMP — pose', 'Select CHOP — 33 × xyz', 'EW Kinetic Energy', 'Lag CHOP — 0.2 s', 'Null CHOP — energy'], ['EW Kinetic Energy', 'Info CHOP — status']]} caption="MediaPipe → Kinetic Energy → smoothed output, with an Info CHOP for the status" />
+  <ol class="recipe">
+    <li>Get a pose: the MediaPipe TouchDesigner plugin, a Kinect CHOP, OSC from a mocap system — anything that gives x, y, z per joint.</li>
+    <li>Select the joints with a Select CHOP so the channels are <b>joint-major</b>: <code>j0x j0y j0z j1x j1y j1z …</code> (see <a href={`${base}concepts#layout`}>channel layout</a>).</li>
+    <li>Add <b>EW L2 Kinetic Energy</b> and wire the Select into it. Leave <code>Source</code> on <em>Stream</em>.</li>
+    <li>Move: <code>kinetic_energy</code> rises. Smooth it with a Lag CHOP and map it to anything.</li>
+    <li>Attach an <b>Info CHOP</b> to the operator: <code>status</code> 0 is OK. Any other value comes with a reason in the Info DAT.</li>
+  </ol>
+
+  <h2><span class="num">04</span>Read the status</h2>
+  <div class="table-wrap">
+    <table>
+      <tbody>
+        <tr><td style="width:60px" class="mono">0</td><td style="width:170px"><span class="status OK">OK</span></td><td>The cook produced output.</td></tr>
+        <tr><td class="mono">1</td><td><span class="status WARMING_UP">WARMING_UP</span></td><td>A window or a filter is still filling: wait, or give it more samples.</td></tr>
+        <tr><td class="mono">2</td><td><span class="status NO_OUTPUT">NO_OUTPUT</span></td><td>The operator emits only on some cooks (between two hops, before the first complete window).</td></tr>
+        <tr><td class="mono">3</td><td><span class="status INVALID_INPUT">INVALID_INPUT</span></td><td>The input is not usable: wrong channel count, too short, NaN, not a timeslice. The reason says why; the outputs are zero.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="margin-top:1rem">The same names and numbers as <code>pyeyesweb.Status</code>, so a CHOP and a Python script can be compared.</p>
+
+  <h2><span class="num">05</span>Where to go next</h2>
+  <div class="grid">
+    <a class="card L2" href={`${base}operators/kinematics`}><div class="top"><span>L2</span></div><h3>Kinematics</h3><p>Velocity, acceleration, jerk and curvature: the input of many other operators.</p></a>
+    <a class="card AP" href={`${base}concepts`}><div class="top"><span>Guide</span></div><h3>Concepts</h3><p>Windows, streams, clips, layouts: how every operator reads its input.</p></a>
+    <a class="card L1" href={base}><div class="top"><span>Catalog</span></div><h3>All operators</h3><p>Filter by layer, purpose, and what still needs testing.</p></a>
+  </div>
+</Base>

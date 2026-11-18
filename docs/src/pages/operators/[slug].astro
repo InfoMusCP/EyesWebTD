@@ -1,0 +1,201 @@
+---
+import Base from '../../layouts/Base.astro';
+import GlanceDiagram from '../../components/GlanceDiagram.astro';
+import NetworkDiagram from '../../components/NetworkDiagram.astro';
+import KindGlyph from '../../components/KindGlyph.astro';
+import { operators, bySlug } from '../../data/index';
+import { layerInfo, kindInfo, tagInfo } from '../../data/types';
+import type { Operator, Param } from '../../data/types';
+
+export function getStaticPaths() {
+  return operators.map((op) => ({ params: { slug: op.slug } }));
+}
+
+const op = bySlug(Astro.params.slug!) as Operator;
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const i = operators.indexOf(op);
+const prev = operators[i - 1], next = operators[i + 1];
+const layerColor: Record<string, string> = { L1: '#7fb3c4', L2: '#a8bf86', L3: '#9895c4', L4: '#c08ba6', AP: '#cfa66e' };
+
+// Links between operators are written as href="<slug>" in the data.
+const links = (html: string) => html.replace(/href="([a-z0-9-]+)"/g, `href="${base}operators/$1"`);
+const paras = (html: string) => links(html).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+
+// Parameters every operator of a kind gets from its base class (page Cook).
+const common: Param[] = [];
+if (op.kind === 'sample' || op.kind === 'stream')
+  common.push({ name: 'Source', label: 'Source', default: 'stream', range: 'stream · clip', desc: op.sourceDesc ?? (op.kind === 'stream'
+    ? 'Stream: a live timeslice, the state stays between cooks. Clip: a recording, the state starts afresh at every cook and the output is as long as the input.'
+    : 'Stream: a live timeslice, the output is a timeslice. Clip: a recording, the output is as long as the input.') });
+if (op.kind === 'stream' || op.kind === 'buffer')
+  common.push({ name: 'Reset', label: 'Reset', default: 'pulse', desc: 'Forget the state at the next cook.' });
+
+const stateLabel: Record<string, string> = { verified: 'Verified in TD', 'to-check': 'To check in TD', watch: 'Under review' };
+const related = (op.related ?? []).map((s) => bySlug(s)).filter(Boolean) as Operator[];
+let n = 0;
+const num = () => String(++n).padStart(2, '0');
+---
+<Base title={op.title} description={op.tagline} current={op.slug}>
+  <div class={op.layer}>
+    <header class="op-hero">
+      <span class="eyebrow">{op.layer} · {layerInfo[op.layer].name}</span>
+      <h1>{op.title}</h1>
+      <p class="tagline">{op.tagline}</p>
+      <div class="chips">
+        <span class="chip layer">{op.label}</span>
+        {(op.tags ?? []).map((t) => <span class="chip atag" title={tagInfo[t].desc}>{tagInfo[t].name}</span>)}
+        <span class="chip">type <b>{op.opType}</b></span>
+        <span class="chip">cook <b>{kindInfo[op.kind].name}</b></span>
+        <span class="chip">inputs <b>{op.inputs.filter((p) => !p.optional || p.port.startsWith('Input 1')).length}</b></span>
+        {op.state && <span class="chip"><span class={`dot ${op.state}`}></span>{stateLabel[op.state]}</span>}
+      </div>
+    </header>
+
+    <div style="margin-top:2rem"><GlanceDiagram op={op} /></div>
+
+    <h2><span class="num">{num()}</span>What it does</h2>
+    <div class="prose">{paras(op.about).map((p) => <p set:html={p} />)}</div>
+    {op.formula && <div class="formula" set:html={op.formula} />}
+
+    <h2><span class="num">{num()}</span>Input</h2>
+    <div class="io-grid">
+      {op.inputs.map((p) => (
+        <div class="port">
+          <div class="port-head"><span class={`fam ${p.family}`}>{p.family}</span><b>{p.port}</b>{p.optional && <span class="muted" style="font-size:.85rem">optional / alternative</span>}</div>
+          <dl>
+            <dt>Channels</dt><dd set:html={p.channels} />
+            <dt>Samples</dt><dd set:html={p.samples} />
+          </dl>
+          {p.desc && <p set:html={links(p.desc)} />}
+        </div>
+      ))}
+    </div>
+
+    <h2><span class="num">{num()}</span>Output</h2>
+    <p class="muted">Shape: <code>{op.output.shape}</code></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Channel</th><th>Meaning</th><th>Range / unit</th></tr></thead>
+        <tbody>
+          {op.output.channels.map((c) => (
+            <tr><td class="name"><code>{c.name}</code></td><td set:html={c.desc} /><td class="muted" set:html={c.range ?? '—'} /></tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    {op.output.notes && <div class="callout info" set:html={op.output.notes} style="margin-top:1rem" />}
+
+    <h2><span class="num">{num()}</span>Parameters</h2>
+    {op.params.length === 0 && common.length === 0 ? (
+      <p class="muted">No parameters: wire the input and read the output.</p>
+    ) : (
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Parameter</th><th>Default</th><th>Description</th></tr></thead>
+          <tbody>
+            {op.params.map((p) => (
+              <tr>
+                <td class="name"><code>{p.name}</code><span class="label">{p.label}</span></td>
+                <td><span class="mono">{p.default}</span>{p.range && <span class="label">{p.range}</span>}</td>
+                <td set:html={p.desc || '—'} />
+              </tr>
+            ))}
+            {common.map((p) => (
+              <tr class="common">
+                <td class="name"><code>{p.name}</code><span class="label">Cook page</span></td>
+                <td><span class="mono">{p.default}</span>{p.range && <span class="label">{p.range}</span>}</td>
+                <td set:html={p.desc} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+    <p class="muted" style="font-size:.88rem;margin-top:.7rem">The first column is the Python name: <code>op('my_op').par.{(op.params[0]?.name ?? 'Reset').split(' ')[0]}</code></p>
+
+    <h2><span class="num">{num()}</span>How it cooks</h2>
+    <div class="kinds" style="grid-template-columns: minmax(260px, 320px) 1fr; align-items: stretch">
+      <div class="panel" style="display:flex;flex-direction:column;justify-content:center"><KindGlyph kind={op.kind} color={layerColor[op.layer]} /></div>
+      <div class="panel">
+        <h3 style="margin-top:0">{kindInfo[op.kind].name}</h3>
+        <p>{kindInfo[op.kind].desc}</p>
+        {op.sourceDesc && <p class="muted" style="margin-top:.6rem">Exception: in Stream mode this operator outputs one sample, the newest (see the Source parameter).</p>}
+        <p style="margin-top:.6rem"><a href={`${base}concepts#kinds`}>Operator kinds explained →</a></p>
+      </div>
+    </div>
+    <h3>Statuses</h3>
+    <p class="muted" style="font-size:.92rem">Read them on an Info CHOP / Info DAT attached to the operator (<code>status</code>, and the reason).</p>
+    <div class="table-wrap">
+      <table>
+        <tbody>
+          {op.statuses.map((s) => (
+            <tr><td style="width:170px"><span class={`status ${s.status}`}>{s.status}</span></td><td set:html={s.when} /></tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <h2><span class="num">{num()}</span>Example network</h2>
+    <NetworkDiagram chains={op.network} current={op.slug} caption="A typical patch — nodes in colour are EyesWeb operators (click to open)" />
+    <ol class="recipe">{op.recipe.map((r) => <li set:html={links(r)} />)}</ol>
+
+    {op.notes && op.notes.length > 0 && (
+      <>
+        <h2><span class="num">{num()}</span>Notes</h2>
+        {op.notes.map((t) => <div class="callout" set:html={links(t)} />)}
+      </>
+    )}
+
+    <h2><span class="num">{num()}</span>Test checklist</h2>
+    <p class="muted" style="font-size:.92rem">Ticks and notes are saved in this browser only. <span class="progress" data-progress></span></p>
+    <div class="checks" data-op={op.slug}>
+      {op.checks.map((c, k) => (
+        <label><input type="checkbox" data-key={`${op.slug}:${k}`} /><span set:html={c} /></label>
+      ))}
+    </div>
+    <textarea class="notes" data-note={op.slug} placeholder="Your test notes: what worked, what to change, keep / remove for the release…"></textarea>
+
+    {related.length > 0 && (
+      <>
+        <h2><span class="num">{num()}</span>Related</h2>
+        <div class="grid">
+          {related.map((r) => (
+            <a class={`card ${r.layer}`} href={`${base}operators/${r.slug}`}>
+              <div class="top"><span>{r.layer}</span><span class={`dot ${r.state ?? ''}`}></span></div>
+              <h3>{r.title}</h3>
+              <p>{r.tagline}</p>
+            </a>
+          ))}
+        </div>
+      </>
+    )}
+
+    <nav class="pager">
+      {prev ? <a href={`${base}operators/${prev.slug}`}><small>← previous</small>{prev.title}</a> : <span />}
+      {next ? <a class="next" href={`${base}operators/${next.slug}`}><small>next →</small>{next.title}</a> : <span />}
+    </nav>
+  </div>
+
+  <script is:inline>
+    (function () {
+      function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+      function set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+      var boxes = document.querySelectorAll('.checks input[data-key]');
+      var prog = document.querySelector('[data-progress]');
+      function update() {
+        var done = 0; boxes.forEach(function (b) { if (b.checked) done++; });
+        if (prog) prog.textContent = done + ' / ' + boxes.length + ' checked';
+      }
+      boxes.forEach(function (b) {
+        b.checked = get('ewtd:' + b.dataset.key) === '1';
+        b.addEventListener('change', function () { set('ewtd:' + b.dataset.key, b.checked ? '1' : '0'); update(); });
+      });
+      update();
+      var note = document.querySelector('textarea[data-note]');
+      if (note) {
+        note.value = get('ewtd:note:' + note.dataset.note) || '';
+        note.addEventListener('input', function () { set('ewtd:note:' + note.dataset.note, note.value); });
+      }
+    })();
+  </script>
+</Base>

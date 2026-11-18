@@ -1,0 +1,89 @@
+---
+// Input ports → operator node → output channels, drawn from the operator record.
+import type { Operator } from '../data/types';
+import { kindInfo } from '../data/types';
+
+interface Props { op: Operator }
+const { op } = Astro.props;
+
+const W = 860, CH = 24, GAP = 7, PAD = 18;
+const LX = 16, LW = 210, NX = 330, NW = 200, RX = 630, RW = 214;
+const layerColor: Record<string, string> = { L1: '#7fb3c4', L2: '#a8bf86', L3: '#9895c4', L4: '#c08ba6', AP: '#cfa66e' };
+const color = layerColor[op.layer];
+const famColor = (f: string) => (f === 'TOP' ? '#a28ec0' : '#86a68c');
+const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+// left: ports (skip alternative layouts marked optional with the same port number only for drawing simplicity)
+const ports = op.inputs.map((p) => ({ ...p, chips: p.example.slice(0, 6) }));
+let y = PAD;
+const leftBlocks = ports.map((p) => {
+  const h = 30 + p.chips.length * (CH + GAP);
+  const b = { p, y, h };
+  y += h + 16;
+  return b;
+});
+const leftH = y - 16 + PAD;
+
+const outs = op.output.channels.slice(0, 8);
+const rightH = PAD * 2 + 26 + outs.length * (CH + GAP);
+const nodeH = 118;
+const H = Math.max(leftH, rightH, nodeH + PAD * 2, 170);
+const nodeY = (H - nodeH) / 2;
+const outY0 = (H - (26 + outs.length * (CH + GAP))) / 2 + 26;
+const wire = (x1: number, y1: number, x2: number, y2: number) => {
+  const dx = (x2 - x1) * 0.5;
+  return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+};
+const kindLabel = kindInfo[op.kind].name;
+---
+<figure class="diagram" style="margin:0">
+  <svg viewBox={`0 0 ${W} ${H}`} width={W} role="img" aria-label={`${op.title}: inputs and outputs`}>
+    <defs>
+      <linearGradient id={`w-${op.slug}`} x1="0" x2="1">
+        <stop offset="0" stop-color="#86a68c" stop-opacity=".9" />
+        <stop offset="1" stop-color={color} stop-opacity=".9" />
+      </linearGradient>
+      <filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="8" /></filter>
+    </defs>
+
+    {leftBlocks.map(({ p, y, h }) => (
+      <g>
+        <rect x={LX} y={y} width={LW} height={h} rx="10" fill="#101218" stroke="#262b36" stroke-dasharray={p.optional ? '4 4' : undefined} />
+        <rect x={LX + 10} y={y + 9} width="38" height="15" rx="4" fill={famColor(p.family)} />
+        <text x={LX + 29} y={y + 20} text-anchor="middle" font-size="9.5" font-weight="700" fill="#0a0b0e" font-family="JetBrains Mono, monospace">{p.family}</text>
+        <text x={LX + 56} y={y + 20.5} font-size="11.5" fill="#9aa3b4" font-family="JetBrains Mono, monospace">{clip(p.port, 22)}</text>
+        {p.chips.map((c, i) => (
+          <g>
+            <rect x={LX + 10} y={y + 30 + i * (CH + GAP)} width={LW - 20} height={CH} rx="6" fill="#1a1e27" stroke="#343a48" />
+            <text x={LX + 20} y={y + 30 + i * (CH + GAP) + 16} font-size="12" fill="#e9ecf2" font-family="JetBrains Mono, monospace">{clip(c, 24)}</text>
+          </g>
+        ))}
+        <path d={wire(LX + LW, y + h / 2, NX, nodeY + nodeH / 2)} fill="none" stroke={`url(#w-${op.slug})`} stroke-width="2.2" stroke-dasharray={p.family === 'TOP' ? '5 5' : undefined} />
+        {p.family === 'TOP' && <text x={(LX + LW + NX) / 2} y={(y + h / 2 + nodeY + nodeH / 2) / 2 - 8} text-anchor="middle" font-size="10.5" fill="#9aa3b4" font-family="JetBrains Mono, monospace">Top parameter</text>}
+        <circle cx={LX + LW} cy={y + h / 2} r="4" fill={famColor(p.family)} />
+      </g>
+    ))}
+
+    <rect x={NX} y={nodeY} width={NW} height={nodeH} rx="14" fill={color} opacity=".07" filter="url(#glow)" />
+    <rect x={NX} y={nodeY} width={NW} height={nodeH} rx="14" fill="#14171e" stroke={color} stroke-width="1.5" />
+    <path d={`M${NX},${nodeY + 14} a14,14 0 0 1 14,-14 h${NW - 28} a14,14 0 0 1 14,14 v14 h-${NW} z`} fill={color} />
+    <text x={NX + 12} y={nodeY + 19} font-size="11" font-weight="700" fill="#0a0b0e" font-family="JetBrains Mono, monospace">EW {op.layer}</text>
+    <text x={NX + NW - 12} y={nodeY + 19} text-anchor="end" font-size="10.5" fill="#0a0b0e" font-family="JetBrains Mono, monospace">CHOP</text>
+    <text x={NX + NW / 2} y={nodeY + 60} text-anchor="middle" font-size="15.5" font-weight="600" fill="#e9ecf2" font-family="Space Grotesk, sans-serif">{clip(op.title, 21)}</text>
+    <text x={NX + NW / 2} y={nodeY + 80} text-anchor="middle" font-size="11" fill="#6b7385" font-family="JetBrains Mono, monospace">{op.opType}</text>
+    <rect x={NX + NW / 2 - 44} y={nodeY + 90} width="88" height="18" rx="9" fill="none" stroke="#343a48" />
+    <text x={NX + NW / 2} y={nodeY + 103} text-anchor="middle" font-size="10.5" fill="#9aa3b4" font-family="JetBrains Mono, monospace">{kindLabel}</text>
+    <circle cx={NX} cy={nodeY + nodeH / 2} r="5" fill="#0a0b0e" stroke="#86a68c" stroke-width="2" />
+    <circle cx={NX + NW} cy={nodeY + nodeH / 2} r="5" fill="#0a0b0e" stroke={color} stroke-width="2" />
+
+    <text x={RX} y={outY0 - 10} font-size="11" fill="#6b7385" font-family="JetBrains Mono, monospace">{clip(op.output.shape, 34)}</text>
+    {outs.map((c, i) => (
+      <g>
+        <path d={wire(NX + NW, nodeY + nodeH / 2, RX, outY0 + i * (CH + GAP) + CH / 2)} fill="none" stroke={color} stroke-opacity=".55" stroke-width="1.6" />
+        <rect x={RX} y={outY0 + i * (CH + GAP)} width={RW} height={CH} rx="6" fill="#1a1e27" stroke={color} stroke-opacity=".45" />
+        <text x={RX + 10} y={outY0 + i * (CH + GAP) + 16} font-size="12" fill="#e9ecf2" font-family="JetBrains Mono, monospace">{clip(c.name, 27)}</text>
+      </g>
+    ))}
+  </svg>
+  <figcaption>input → {op.label} → output</figcaption>
+</figure>

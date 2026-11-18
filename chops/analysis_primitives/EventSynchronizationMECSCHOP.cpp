@@ -1,23 +1,21 @@
 // TouchDesigner Event Synchronization MECS CHOP - wraps ew::sync::EventSynchronizationMECS
 // Multi Event Class Synchronization across N event trains with C event classes.
-// Input: N * C channels (series0_c0, series0_c1, ..., series1_c0, ...) across the samples of the buffer.
-// Output: 2 * C channels, 1 sample: synchronization_0..C-1, then events_0..C-1.
-// Buffer with state: the core accumulates the events of the buffers it has seen; Reset forgets them.
+// Input: N * C channels (series0_c0, series0_c1, ..., series1_c0, ...) across the samples of the window: the input is the
+// window (a Trail CHOP of the events, a File In). Output: 2 * C channels, 1 sample: synchronization_0..C-1, then
+// events_0..C-1. Nothing is kept between cooks: no events are carried over from a previous window.
 #include <algorithm>
 #include <cstring>
 #include <vector>
 #include "ew/common/time_series.h"
 #include "ew/features/sync/event_synchronization_mecs.h"
 #include "ew_td/plugin.h"
-#include "ew_td/buffer_chop.h"
-#include "ew_td/slot.h"
 
 using namespace TD;
 using namespace ew_td;
 using ew::TimeSeriesView;
 using ew::sync::EventSynchronizationMECS;
 
-class EventSynchronizationMECSCHOP : public EwBufferChop {
+class EventSynchronizationMECSCHOP : public EwChop {
 public:
     explicit EventSynchronizationMECSCHOP(const OP_NodeInfo*) {}
 
@@ -38,9 +36,7 @@ public:
         p.number("Gaussianmean", "Gaussian Mean (samples)", 3.3333, Range::atLeast(0.0, 100.0));
     }
 
-    void dropState() override { feature_.drop(); }
-
-    void process(CHOP_Output* out, const OP_Inputs* in) override {
+    void cook(CHOP_Output* out, const OP_Inputs* in) override {
         const InputView input = chopInput(in);
         const int numSeries = std::max(2, in->getParInt("Numberofinputs"));
         const int numClasses = std::max(1, in->getParInt("Numberofeventclasses"));
@@ -58,9 +54,10 @@ public:
             p.gaussianSigma = in->getParDouble("Gaussiansigma");
             p.gaussianMean = in->getParDouble("Gaussianmean");
         }
-        EventSynchronizationMECS& feature = feature_.get(p);
+        EventSynchronizationMECS feature(p);  // every window on its own
 
         const int n = input.samples();
+        if (n < 2) return windowTooShort(n, 2);
         std::vector<std::vector<double>> seriesBuf(numSeries, std::vector<double>(static_cast<size_t>(numClasses) * n));
         std::vector<TimeSeriesView> views(numSeries);
         for (int s = 0; s < numSeries; ++s) {
@@ -78,9 +75,6 @@ public:
             out->channels[numClasses + c][0] = static_cast<float>(result.events(0, c));
         }
     }
-
-private:
-    FeatureSlot<EventSynchronizationMECS> feature_;
 };
 
 EW_TD_CHOP(EventSynchronizationMECSCHOP, "Eweventsynchronizationmecs", "EW AP Event Synchronization MECS", 1, 1)

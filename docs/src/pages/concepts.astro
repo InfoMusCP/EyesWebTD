@@ -1,0 +1,109 @@
+---
+import Base from '../layouts/Base.astro';
+import KindGlyph from '../components/KindGlyph.astro';
+import NetworkDiagram from '../components/NetworkDiagram.astro';
+import { operators, layerOrder, byLayer } from '../data/index';
+import { layerInfo, kindInfo } from '../data/types';
+import type { Kind } from '../data/types';
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const kinds: Kind[] = ['frame', 'sample', 'stream', 'buffer'];
+const colors: Record<Kind, string> = { frame: '#7fb3c4', sample: '#a8bf86', stream: '#cfa66e', buffer: '#c08ba6' };
+const ofKind = (k: Kind) => operators.filter((o) => o.kind === k);
+---
+<Base title="Concepts" section="concepts">
+  <header class="op-hero">
+    <span class="eyebrow">Guide</span>
+    <h1>Concepts</h1>
+    <p class="tagline">Four ideas explain how every operator reads its input: layers, cook kinds, channel layout, and windows.</p>
+  </header>
+
+  <h2 id="layers"><span class="num">01</span>Layers</h2>
+  <p>The operators follow the conceptual model of EyesWeb: from raw physical signals up to expressive and social qualities. A feature of a layer usually takes the output of the layer below.</p>
+  <figure class="diagram" style="margin:0">
+    <svg viewBox="0 0 860 170" width="860" role="img" aria-label="Layers">
+      {['L1', 'L2', 'L3', 'L4'].map((l, i) => {
+        const c = ({ L1: '#7fb3c4', L2: '#a8bf86', L3: '#9895c4', L4: '#c08ba6' } as Record<string, string>)[l];
+        const x = 16 + i * 200;
+        return (
+          <g>
+            <rect x={x} y="20" width="170" height="86" rx="12" fill="#14171e" stroke={c} stroke-opacity={l === 'L3' ? 0.4 : 1} stroke-dasharray={l === 'L3' ? '4 4' : undefined} />
+            <text x={x + 14} y="44" font-size="12" font-weight="700" fill={c} font-family="JetBrains Mono, monospace">{l}</text>
+            <text x={x + 14} y="68" font-size="14" font-weight="600" fill="#e9ecf2" font-family="Space Grotesk, sans-serif">{layerInfo[l as 'L1'].name}</text>
+            <text x={x + 14} y="90" font-size="11" fill="#9aa3b4" font-family="JetBrains Mono, monospace">{l === 'L3' ? 'none in release 1' : `${byLayer(l as 'L1').length} operators`}</text>
+            {i < 3 && <path d={`M${x + 172},63 h26`} stroke="#4a5266" stroke-width="2" marker-end="url(#arr)" />}
+          </g>
+        );
+      })}
+      <rect x="16" y="124" width="770" height="34" rx="10" fill="#14171e" stroke="#cfa66e" />
+      <text x="30" y="146" font-size="12" font-weight="700" fill="#cfa66e" font-family="JetBrains Mono, monospace">AP</text>
+      <text x="62" y="146" font-size="13" fill="#e9ecf2" font-family="Space Grotesk, sans-serif">Analysis primitives — entropy, recurrence, synchrony, periodicity, peaks — usable at any layer ({byLayer('AP').length})</text>
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4a5266" /></marker></defs>
+    </svg>
+  </figure>
+
+  <h2 id="kinds"><span class="num">02</span>How an operator cooks</h2>
+  <p>Every operator belongs to one of four kinds. The kind tells you what the input samples mean, how long the output is, and whether something is remembered between cooks.</p>
+  <div class="kinds">
+    {kinds.map((k) => (
+      <div class="panel">
+        <KindGlyph kind={k} color={colors[k]} />
+        <h3 style={`color:${colors[k]}`}>{kindInfo[k].name}</h3>
+        <p>{kindInfo[k].desc}</p>
+        <p style="margin-top:.6rem;font-size:.82rem" class="mono">{ofKind(k).length} operators</p>
+      </div>
+    ))}
+  </div>
+  <h3>Source: stream or clip</h3>
+  <p><b>Per sample</b> and <b>Stream</b> operators have a <code>Source</code> parameter on the <em>Cook</em> page.</p>
+  <ul class="prose">
+    <li><b>Stream</b> (default): the input is a live timeslice. The output is a timeslice too, so TouchDesigner decides its length at every cook (a live source can give 1 or 2 samples per frame) and the viewer does not flip between a series and a single value. A stream operator keeps its state between cooks.</li>
+    <li><b>Clip</b>: the input is a recording (a File In CHOP, a frozen Trail). The output is as long as the input and the state starts afresh at every cook — the result depends on the clip alone.</li>
+  </ul>
+  <div class="callout">An input that is not a timeslice in Stream mode is <span class="status INVALID_INPUT">INVALID_INPUT</span> with the advice to switch to Clip: it is never silently fed in pieces.</div>
+  <p><b>Stream</b> and <b>Buffer</b> operators also have a <code>Reset</code> pulse. The state is also forgotten when the input changes its channel count or sample rate. The Info CHOP shows <code>samples_processed</code> and <code>resets</code>.</p>
+
+  <h2 id="windows"><span class="num">03</span>Windows</h2>
+  <p>One rule: <b>Window</b> operators (Directness, Spectral Arc Length, Sample Entropy, Binary Pulses Regularity, Event Synchronization…) analyse <b>the input you give them</b>: the whole input CHOP is the window. <b>Stream</b> operators (Kinematics, Rarity, Scalar Peak Detector…) take the <b>live signal</b> and remember what they need.</p>
+  <p>In a live network, build the window with a <b>Trail CHOP</b>: its length (in seconds) is the time span the feature looks at, and you can open it to see exactly what the operator is analysing. For a recording, feed a File In CHOP.</p>
+  <NetworkDiagram chains={[['Pose CHOP — live', 'Select CHOP — hand', 'Trail CHOP — window 1 s', 'EW Directness', 'Null CHOP']]} caption="A live input becomes a sliding window with a Trail CHOP" />
+  <ul class="prose" style="margin-top:1rem">
+    <li>The <b>sample rate</b> of the CHOP is the sampling rate of the feature (seconds, Hz, velocities per second): make sure it is the real one.</li>
+    <li>A window operator fed the live signal directly gets 1 or 2 samples: it shows <span class="status WARMING_UP">WARMING_UP</span> with the reason <em>feed a window (a Trail CHOP)</em>.</li>
+    <li>The window is analysed again at every cook: nothing is kept between cooks, so the result depends on the window alone.</li>
+    <li>A sliding window cuts gestures at arbitrary points: smoothness metrics oscillate. Segment the movement (peaks, pauses) for stable values.</li>
+  </ul>
+
+  <h2 id="layout"><span class="num">04</span>Channel layout</h2>
+  <p>Operators that take a body read the joints <b>joint-major</b>: the three coordinates of joint 0, then joint 1, and so on. Joint indices in parameters (<code>Pairs</code>, <code>Referencepoint</code>) count joints in this order.</p>
+  <figure class="diagram" style="margin:0">
+    <svg viewBox="0 0 860 120" width="860" role="img" aria-label="Joint-major layout">
+      {['j0x', 'j0y', 'j0z', 'j1x', 'j1y', 'j1z', 'j2x', 'j2y', 'j2z', '…'].map((c, i) => {
+        const joint = Math.floor(i / 3);
+        const col = ['#7fb3c4', '#a8bf86', '#cfa66e', '#6b7385'][Math.min(joint, 3)];
+        return (
+          <g>
+            <rect x={16 + i * 83} y="20" width="76" height="34" rx="7" fill="#1a1e27" stroke={col} />
+            <text x={54 + i * 83} y="42" text-anchor="middle" font-size="13" fill="#e9ecf2" font-family="JetBrains Mono, monospace">{c}</text>
+          </g>
+        );
+      })}
+      {[0, 1, 2].map((j) => (
+        <g>
+          <path d={`M${20 + j * 249},66 h${233}`} stroke={['#7fb3c4', '#a8bf86', '#cfa66e'][j]} stroke-width="2" />
+          <text x={136 + j * 249} y="88" text-anchor="middle" font-size="12" fill="#9aa3b4" font-family="JetBrains Mono, monospace">joint {j}</text>
+        </g>
+      ))}
+      <text x="16" y="112" font-size="11" fill="#6b7385" font-family="JetBrains Mono, monospace">channels of the input CHOP, left to right · every sample is one pose</text>
+    </svg>
+  </figure>
+  <p style="margin-top:1rem">MediaPipe gives channels per landmark; a Select CHOP with a pattern like <code>p*:x p*:y p*:z</code> gives axis-major order — reorder with a <b>Shuffle CHOP</b> or select per joint. Trajectory operators take one point (<code>x y [z]</code>) over time instead.</p>
+
+  <h2 id="images"><span class="num">05</span>Images</h2>
+  <p>Silhouette Body Parts and Silhouette Centroids read a <b>TOP</b> named in their <code>Top</code> parameter (drag the TOP onto the field). They have no TOP input: you cannot wire the TOP into the CHOP. They download the texture from the GPU at every cook (~20 ms at 1920 × 1088): reduce the resolution first. The silhouette operators want a <b>binary mask</b>, not a colour video.</p>
+  <h3>Image coordinates: y points down</h3>
+  <p>The image operators give pixel coordinates in the convention of EyesWeb and PyEyesWeb: <b>(0, 0) is the top-left pixel and y grows downward</b>. TouchDesigner places (0, 0) at the <b>bottom-left</b> with y up. Flip y before drawing over a TOP:</p>
+  <div class="formula">y<sub>TD</sub> = height − 1 − y</div>
+  <p>where <i>height</i> is the resolution of the TOP the operator read (the mask), not of the original video. In a network: Select CHOP <code>*_y</code> → Math CHOP, <em>Range</em> page, From Range <code>0 … op('mask').height - 1</code>, To Range <code>op('mask').height - 1 … 0</code>. In Python: <code>y_up = mask.shape[0] - 1 - y</code>.</p>
+
+  <p style="margin-top:3rem"><a class="btn primary" href={base}>Browse the catalog →</a></p>
+</Base>

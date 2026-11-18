@@ -55,7 +55,7 @@ public:
         tsv.data = buf.data();
         tsv.channels = nch;
         tsv.samples = samples;
-        tsv.samplingRate = in->getInputCHOP(0)->sampleRate;
+        tsv.samplingRate = input.sampleRate();
 
         MultiScaleEntropy mse(p);
         const auto res = mse.process(tsv);

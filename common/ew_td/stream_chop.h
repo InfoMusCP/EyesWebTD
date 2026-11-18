@@ -10,6 +10,11 @@
 //
 //   Reset (pulse)     forgets the state at the next cook.
 //
+// An operator can ask for a stream output of ONE sample (`oneSampleInStream()`): every sample of the input still reaches
+// the feature, but the output is always 1 sample, the result for the newest input sample, whatever number of samples the
+// live source gives in a frame (1 or 2). The output then does not flip between a slice and a series, and an input that is
+// not a timeslice is accepted. Clip is unchanged (one output sample per input sample).
+//
 // The state is also forgotten when the input changes its number of channels or its sample rate. Parameters are the
 // concern of the operator: FeatureSlot hands them to the core feature, which decides what a change of them resets.
 //
@@ -31,11 +36,11 @@ public:
     // Forget the accumulated state. Called before `process` when the state must start afresh.
     virtual void dropState() = 0;
 
-    int numSamples(const TD::OP_Inputs* in) const override { return inputSamples(in); }
+    int numSamples(const TD::OP_Inputs* in) const override { return singleSample(in) ? 1 : inputSamples(in); }
 
     void getGeneralInfo(TD::CHOP_GeneralInfo* info, const TD::OP_Inputs* in, void* reserved) override {
         EwChop::getGeneralInfo(info, in, reserved);
-        info->timeslice = !isClip(in);  // in clip mode the output length is the one of getOutputInfo
+        info->timeslice = !isClip(in) && !oneSampleInStream();  // in clip mode, and for one sample, the length is the one of getOutputInfo
     }
 
     void pulsePressed(const char* name, void*) override {
@@ -52,16 +57,22 @@ public:
     void cook(TD::CHOP_Output* out, const TD::OP_Inputs* in) final {
         const InputView input = chopInput(in);
         const bool clip = isClip(in);
-        if (!clip)
+        if (!clip && !oneSampleInStream())
             require(input.samples() == out->numSamples,
                     "Input is not a timeslice (" + std::to_string(input.samples()) + " samples for a slice of " +
                         std::to_string(out->numSamples) + "); set Source to Clip to process a recording");
         if (state_.begin({input.channels(), input.sampleRate()}, clip) != ResetReason::None) dropState();
         process(out, in, input);
-        state_.processed(out->numSamples);
+        state_.processed(input.samples());
     }
 
 protected:
+    // True for an operator whose stream output is one sample, the newest (see the top of the file). Default false.
+    virtual bool oneSampleInStream() const { return false; }
+
+    // True when this cook outputs one sample: Stream mode of an operator with oneSampleInStream().
+    bool singleSample(const TD::OP_Inputs* in) const { return oneSampleInStream() && !isClip(in); }
+
     // Entries that a streaming operator adds to its Info output.
     virtual void describeStream(Info&) const {}
 

@@ -1,7 +1,7 @@
 """Tests of the mock TouchDesigner host itself (ewhost.py / ew_td_host.dll).
 
 Two groups:
-  * real operators (Directness frame, MotionNoiseDetector stream, Rarity buffer) found through EW_TD_PLUGINS, the
+  * real operators (Directness frame, MotionNoiseDetector stream, CurvatureVelocityCorrelation buffer) found through EW_TD_PLUGINS, the
     directory that holds <layer>/*.dll (<build>/Plugins/EyesWeb); skipped when it is unset;
   * the fixture plugin (ew_td_fixture.dll, next to ew_td_host.dll), which declares a parameter of every kind and can
     misbehave on request, to test the host against the raw TouchDesigner contract.
@@ -57,7 +57,7 @@ def stream(plugins_dir):
 
 @pytest.fixture
 def buffer(plugins_dir):
-    with Chop(find_operator(plugins_dir, "Rarity")) as c:
+    with Chop(find_operator(plugins_dir, "CurvatureVelocityCorrelation")) as c:
         yield c
 
 
@@ -153,7 +153,7 @@ def test_frame_accepts_1d_input_as_one_channel_and_rejects_it(directness):
 
 def test_frame_too_short_input_is_warming_up(directness):
     out = directness.cook(line(1, 2))             # one sample: not enough yet, not an error
-    assert out.status_name == "WARMING_UP" and out.reason == "1 of 2 samples"
+    assert out.status_name == "WARMING_UP" and out.reason.startswith("1 of 2 samples") and "Trail CHOP" in out.reason
     assert out.warning == ""
     assert np.all(out.data == 0)
 
@@ -286,32 +286,29 @@ def test_stream_bad_channel_count_warns(stream):
     assert np.all(out.data == 0)
 
 
-# ---- buffer operator (Rarity) ---------------------------------------------------------------------------------------------
+# ---- buffer operator (Curvature Velocity Correlation: its filters need the previous window) ----------------------------
+
+def _walk(n, seed):
+    t = np.arange(n) / 60.0
+    rng = np.random.default_rng(seed)
+    return np.column_stack([np.sin(2 * t) + 0.01 * rng.standard_normal(n), np.cos(3 * t), 0.5 * t]).astype(np.float32)
+
 
 def test_buffer_shape_names_and_reset(buffer):
-    x = np.random.default_rng(1).random((20, 3)).astype(np.float32)
-    first = buffer.cook(x)
-    assert first.names == ["rarity_0", "rarity_1", "rarity_2"]
-    assert first.data.shape == (20, 3)
+    first = buffer.cook(_walk(20, 1))                              # the filters have no previous window yet
+    assert first.names[0] == "smoothness" and first.status_name == "WARMING_UP"
     assert first.info["resets"] == 0
-    second = buffer.cook(x)
-    assert not np.array_equal(first.data, second.data)       # the memory persists
+    second = buffer.cook(_walk(20, 2))                             # the memory persisted: now there is one
+    assert second.status_name == "OK"
     buffer.pulse("Reset")
-    third = buffer.cook(x)
-    np.testing.assert_array_equal(first.data, third.data)
+    third = buffer.cook(_walk(20, 3))
+    assert third.status_name == "WARMING_UP"                       # forgotten: no previous window again
     assert third.info["resets"] == 1
-
-
-def test_buffer_mode_distance_gives_one_sample(buffer):
-    buffer.set("Method", "mode_distance")
-    x = np.random.default_rng(2).random((30, 2)).astype(np.float32)
-    out = buffer.cook(x)
-    assert out.data.shape == (1, 2) and out.names == ["rarity_0", "rarity_1"]
 
 
 def test_buffer_without_input(buffer):
     out = buffer.cook()
-    assert out.data.shape == (1, 1) and out.status_name == "NO_OUTPUT"
+    assert out.status_name == "NO_OUTPUT"
 
 
 # ---- every operator survives a generic cook ---------------------------------------------------------------------------------

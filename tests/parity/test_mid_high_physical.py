@@ -640,15 +640,20 @@ def hit_points(n, seed, lo, hi):
 def test_hit_cell_detector_declaration(plugin):
     node = plugin("HitCellDetector")
     assert (node.op_type, node.op_label, node.num_inputs) == ("Ewhitcelldetector", "EW L1 Hit Cell Detector", 1)
-    out = node.cook(np.array([[0.5, 0.5], [0.1, 0.9]]))
-    # Class B: PyEyesWeb's output is a (n, 2) list of (i, j); the CHOP has one sample per point, channels cell_row, cell_col.
-    assert list(out.names) == ["cell_row", "cell_col"] and out.data.shape == (2, 2)
+    pts = np.array([[0.5, 0.5], [0.1, 0.9]])
+    # Class B: the output of PyEyesWeb is a (n, 2) list of (i, j); the CHOP has the channels cell_row, cell_col: one sample in
+    # Stream (the newest point, see test_sample_source.py), one per point in Clip.
+    out = node.cook(pts)
+    assert list(out.names) == ["cell_row", "cell_col"] and out.data.shape == (1, 2)
+    node.set("Source", "clip")
+    assert node.cook(pts).data.shape == (2, 2)
     assert HitCellDetector().outputs.names == ("cells",)
 
 
 @pytest.mark.parametrize("kind", ["default", "custom"])
 def test_hit_cell_detector_parity(plugin, kind):
     node = plugin("HitCellDetector")
+    node.set("Source", "clip")                                     # one cell per point of the series
     if kind == "default":
         kw, pts = {}, hit_points(31, 1, -0.3, 1.3)
     else:
@@ -664,11 +669,14 @@ def test_hit_cell_detector_parity(plugin, kind):
 
 def test_hit_cell_detector_edges_of_the_area(plugin):
     pts = f32([[0, 0], [1, 1], [1, 0], [0, 1], [0.5, 0.5], [0.1, 0.2], [0.3, 0.7]])
-    assert_close(plugin("HitCellDetector").cook(pts).data, hit_oracle(pts), what="the upper edge belongs to the last cell")
+    node = plugin("HitCellDetector")
+    node.set("Source", "clip")
+    assert_close(node.cook(pts).data, hit_oracle(pts), what="the upper edge belongs to the last cell")
 
 
 def test_hit_cell_detector_clip_off_inside(plugin):
     node = plugin("HitCellDetector")
+    node.set("Source", "clip")
     node.set("Clipvalues", 0)
     pts = hit_points(25, 4, 0.0, 1.0)
     assert_close(node.cook(pts).data, hit_oracle(pts, clip_values=False))
@@ -678,6 +686,7 @@ def test_hit_cell_detector_clip_off_outside_gives_minus_one(plugin):
     # Class B: the core rejects the whole call (PyEyesWeb: INVALID_INPUT), so every point is -1, the valid ones too; the CHOP
     # source says "-1 for a point outside the area", which understates this.
     node = plugin("HitCellDetector")
+    node.set("Source", "clip")
     node.set("Clipvalues", 0)
     out = node.cook(f32([[0.5, 0.5], [1.5, 0.5], [0.2, -0.1]]))
     assert_close(out.data, np.full((3, 2), -1.0))
@@ -699,4 +708,6 @@ def test_hit_cell_detector_unreadable_input_gives_minus_one(plugin):
 def test_hit_cell_detector_nan_is_invalid(plugin):
     pts = np.array([[0.5, np.nan], [0.2, 0.3]])
     assert HitCellDetector().process(pts).status == Status.INVALID_INPUT
-    assert plugin("HitCellDetector").cook(pts).status_name == "INVALID_INPUT"
+    node = plugin("HitCellDetector")
+    node.set("Source", "clip")
+    assert node.cook(pts).status_name == "INVALID_INPUT"

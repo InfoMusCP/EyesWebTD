@@ -25,7 +25,7 @@ public:
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
         if (!checkSlice(out, in)) return;
-        const InputView input = chopInput(in);
+        const InputView input = sampleInput(in);
         require(input.channels() >= 6, "Equilibrium requires at least 6 channels: lf_x, lf_y, rf_x, rf_y, bary_x, bary_y");
 
         Equilibrium::Params p;

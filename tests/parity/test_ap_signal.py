@@ -60,96 +60,58 @@ def declared(node, op_type, label):
 
 
 # ==== BinaryPulsesRegularity =========================================================================================
+# The input is the window (a Trail CHOP of the pulses): one result per cook, nothing kept. PyEyesWeb gives the same number
+# for a window of the same samples (window = the length of the input, the result at its last sample).
 BPR_SIGNALS = {
     "jitter": lambda: data.pulse_train(137, period=7, jitter=1, seed=3),
     "density": lambda: data.pulse_train(151, density=0.15, seed=9),
     "regular": lambda: data.pulse_train(113, period=6),
 }
-BPR_PARAMS = [dict(Window=30, Hop=1, Threshold=1), dict(Window=40, Hop=5, Threshold=2), dict(Window=25, Hop=7, Threshold=3)]
 
 
-def bpr_expected(x, p):
-    f = BinaryPulsesRegularity(window=p["Window"], hop=p["Hop"], threshold=p["Threshold"])
-    return drive(f, f32(x), lambda r: [r.is_regular, r.pulse_count, r.is_regularity_detected], 3)
+def bpr_expected(x, threshold):
+    f = BinaryPulsesRegularity(window=len(x), threshold=threshold)
+    for v in f32(x):
+        r = f.process(float(v))
+    return np.array([r.is_regular, r.pulse_count], dtype=float)
 
 
 def test_bpr_declaration(plugin):
     node = plugin("BinaryPulsesRegularity")
     declared(node, "Ewbinarypulsesregularity", "EW AP Binary Pulses Regularity")
     out = node.cook(np.zeros(40))
-    assert out.names == list(BinaryPulsesRegularity(window=10).outputs.flat_names)
-    assert out.data.shape == (1, 3)
+    assert out.names == list(BinaryPulsesRegularity(window=10).outputs.flat_names)[:2]   # the onset is left to the user
+    assert out.data.shape == (1, 2)
+    assert "Window" not in [p.name for p in node.params] and "Reset" not in [p.name for p in node.params]
 
 
-@pytest.mark.parametrize("params", BPR_PARAMS)
+@pytest.mark.parametrize("threshold", [1, 2, 3])
 @pytest.mark.parametrize("signal", BPR_SIGNALS)
-@pytest.mark.parametrize("size", [1, 3, 7, 1000])
-def test_bpr_parity(plugin, signal, params, size):
-    # One CHOP value per cook (held between windows) against the held PyEyesWeb result at the same sample; chunk
-    # lengths 1/3/7 also prove the state is independent of how the input is cut.
+@pytest.mark.parametrize("length", [25, 30, 40, 100])
+def test_bpr_parity(plugin, signal, threshold, length):
     x = BPR_SIGNALS[signal]()
     node = plugin("BinaryPulsesRegularity")
-    for k, v in params.items():
-        node.set(k, v)
-    expected, status = bpr_expected(x, params)
-    for s, out in zip(slices(len(x), size), cook_chunks(node, x.astype(np.float32), size)):
-        assert_close(out.data[0], expected[s.stop - 1], what=f"{signal} {params} chunk end {s.stop}")
-        if size == 1:
-            assert out.status == status[s.stop - 1], f"status at sample {s.stop}"
+    node.set("Threshold", threshold)
+    for end in range(length, len(x) + 1, 9):                    # a sliding window, as a Trail CHOP gives it
+        window = x[end - length:end].astype(np.float32)
+        out = node.cook(window)
+        assert out.status_name == "OK"
+        assert_close(out.data[0], bpr_expected(window, threshold), what=f"{signal} {threshold} window ending at {end}")
 
 
-def test_bpr_reset_and_live_threshold(plugin):
+def test_bpr_nothing_is_kept_between_cooks(plugin):
     x = BPR_SIGNALS["jitter"]().astype(np.float32)
     node = plugin("BinaryPulsesRegularity")
-    first = node.cook(x).data.copy()
-    node.pulse("Reset")
-    again = node.cook(x).data
-    assert_close(again, first, what="after Reset the first answer comes back")
-    # Threshold is live: changing it keeps the window.
-    node.pulse("Reset")
-    node.set("Window", 30)
-    node.cook(x[:60])
-    node.set("Threshold", 2)
-    got = node.cook(x[60:]).data[0]
-    f = BinaryPulsesRegularity(window=30, threshold=1)
-    held, _ = drive(f, f32(x[:60]), lambda r: [r.is_regular, r.pulse_count, r.is_regularity_detected], 3)
-    f.threshold = 2
-    cur = held[-1]
-    for v in f32(x[60:]):
-        r = f.process(v)
-        if r.status == Status.OK:
-            cur = np.array([r.is_regular, r.pulse_count, r.is_regularity_detected], dtype=float)
-    assert_close(got, cur, what="live threshold keeps the window")
-
-
-@pytest.mark.xfail(strict=True, reason="C: Window change drops the ring buffer (and warms up again); PyEyesWeb keeps the newest samples")
-def test_bpr_window_change_keeps_newest_samples(plugin):
-    x = BPR_SIGNALS["regular"]().astype(np.float32)
-    node = plugin("BinaryPulsesRegularity")
-    node.cook(x[:60])
-    node.set("Window", 20)
-    got = node.cook(x[60:61]).data[0]
-    f = BinaryPulsesRegularity(window=30)
-    for v in f32(x[:60]):
-        f.process(v)
-    f.window = 20
-    r = f.process(float(x[60]))
-    assert r.status == Status.OK
-    assert_close(got, [r.is_regular, r.pulse_count, r.is_regularity_detected])
+    first = node.cook(x[:60]).data.copy()
+    node.cook(x[60:])
+    assert_close(node.cook(x[:60]).data, first)
 
 
 def test_bpr_status_and_edges(plugin):
     node = plugin("BinaryPulsesRegularity")
-    out = node.cook(np.ones(10))                   # shorter than Window=30
-    assert (out.status, out.status_name) == (WARMING_UP, "WARMING_UP")
+    out = node.cook(np.ones(2))                                  # too short to be a window
+    assert out.status_name == "WARMING_UP" and "Trail CHOP" in out.reason
     assert not out.data.any()
-    # Hop larger than 1: a cook that completes no new window says NO_OUTPUT and keeps the last numbers.
-    node = plugin("BinaryPulsesRegularity")
-    node.set("Window", 10)
-    node.set("Hop", 5)
-    node.cook(data.pulse_train(10, period=3))
-    held = node.cook(np.zeros(2))
-    assert held.status == NO_OUTPUT
     assert node.cook().status == NO_OUTPUT and node.cook().warning == ""
 
 
@@ -224,11 +186,13 @@ def test_mse_edges(plugin):
 
 
 # ==== Periodicity =====================================================================================================
+# The input is the window (a Trail CHOP): one result per cook, nothing kept. PyEyesWeb gives the same result for a window of
+# the same samples (window = the length of the input, the result at its last sample).
 PER_PARAMS = [
     dict(),
-    dict(Method="small2large", Window=48, Hop=7, Threshold=0.3),
-    dict(Method="mbest", Window=64, Hop=9, Bestperiods=4),
-    dict(Method="mbest", Window=60, Hop=11, Bestperiods=5, Sortbypower=1),
+    dict(Method="small2large", Threshold=0.3),
+    dict(Method="mbest", Bestperiods=4),
+    dict(Method="mbest", Bestperiods=5, Sortbypower=1),
 ]
 PER_SIGNALS = {
     "pulses": lambda: np.column_stack([np.tile([1.0, 0, 0, 0, 0, 0, 0], 40)[:277], np.tile([2.0, 0, 1.0], 100)[:277]]),
@@ -236,208 +200,207 @@ PER_SIGNALS = {
 }
 
 
-def per_args(p):
-    return dict(window=p.get("Window", 128), hop=p.get("Hop", 32), method=p.get("Method", "small2large"),
-                threshold=p.get("Threshold", 0.1), best_periods=p.get("Bestperiods", 3), sort_by_power=bool(p.get("Sortbypower", 0)))
+def per_args(p, window):
+    return dict(window=window, method=p.get("Method", "small2large"), threshold=p.get("Threshold", 0.1),
+                best_periods=p.get("Bestperiods", 3), sort_by_power=bool(p.get("Sortbypower", 0)))
 
 
-def per_expected(x, p):
-    """Held (periods, powers) per sample, interleaved period<c>, power<c> like the CHOP channels; cols columns."""
-    f = Periodicity(**per_args(p))
-    f.reset()
-    held, status, cur = [], [], None
-    for row in x:
+def per_expected(window_x, p):
+    """(periods, powers) of the window, interleaved period<c>, power<c> like the CHOP channels."""
+    f = Periodicity(**per_args(p, len(window_x)))
+    for row in window_x:
         r = f.process(row)
-        status.append(int(r.status))
-        if r.status == Status.OK:
-            cur = np.stack([np.stack([r.periods[c], r.powers[c]]) for c in range(x.shape[1])]).reshape(-1, r.periods.shape[1])
-        held.append(cur)
-    return held, np.array(status)
+    assert r.status == Status.OK
+    return np.stack([np.stack([r.periods[c], r.powers[c]]) for c in range(window_x.shape[1])]).reshape(-1, r.periods.shape[1])
 
 
 def test_per_declaration(plugin):
     node = plugin("Periodicity")
     declared(node, "Ewperiodicity", "EW AP Periodicity")
-    out = node.cook(np.tile(np.eye(7)[:, :2], (20, 1)))
-    # Layout: period<c>, power<c> per channel; columns are samples: Window / 2 + 1 for small2large, M for mbest.
+    out = node.cook(np.tile(np.eye(7)[:, :2], (20, 1)))      # 140 samples
+    # Layout: period<c>, power<c> per channel; columns are samples: N / 2 + 1 for small2large, M for mbest.
     assert out.names == ["period0", "power0", "period1", "power1"]
-    assert out.data.shape == (65, 4)
+    assert out.data.shape == (71, 4)
+    names = [p.name for p in node.params]
+    assert "Window" not in names and "Hop" not in names and "Reset" not in names
     node.set("Method", "mbest")
-    assert node.cook(np.zeros((10, 1))).data.shape == (3, 2)
+    assert node.cook(np.tile(np.eye(7)[:, :1], (2, 1))).data.shape == (3, 2)
 
 
 @pytest.mark.parametrize("params", PER_PARAMS)
 @pytest.mark.parametrize("signal", PER_SIGNALS)
-@pytest.mark.parametrize("size", [1, 13, 1000])
-def test_per_parity(plugin, signal, params, size):
-    x = PER_SIGNALS[signal]().astype(np.float32)
+@pytest.mark.parametrize("length", [48, 64, 128])
+def test_per_parity(plugin, signal, params, length):
+    x = f32(PER_SIGNALS[signal]())
     node = plugin("Periodicity")
     for k, v in params.items():
         node.set(k, v)
-    expected, status = per_expected(f32(x), params)
-    for s, out in zip(slices(len(x), size), cook_chunks(node, x, size)):
-        want = expected[s.stop - 1]
-        if want is None:                           # before the first window the CHOP holds -1
-            assert (out.data == -1).all() and out.status == WARMING_UP
-            continue
-        assert_close(out.data, want.T, what=f"{signal} {params} chunk end {s.stop}")
-        if size == 1:
-            assert out.status == status[s.stop - 1]
+    for end in range(length, len(x) + 1, 37):                 # a sliding window, as a Trail CHOP gives it
+        window = x[end - length:end]
+        out = node.cook(window)
+        assert out.status_name == "OK"
+        assert_close(out.data, per_expected(window, params).T, what=f"{signal} {params} window ending at {end}")
 
 
-def test_per_reset(plugin):
-    x = PER_SIGNALS["noisy"]().astype(np.float32)
+def test_per_nothing_is_kept_between_cooks(plugin):
+    x = f32(PER_SIGNALS["noisy"]())
     node = plugin("Periodicity")
-    node.set("Window", 64)
-    first = node.cook(x).data.copy()
-    node.cook(x[:20])
-    node.pulse("Reset")
-    assert_close(node.cook(x).data, first, what="after Reset the first answer comes back")
-
-
-def test_per_live_threshold_keeps_window(plugin):
-    x = PER_SIGNALS["pulses"]().astype(np.float32)
-    node = plugin("Periodicity")
-    node.set("Window", 48)
-    node.set("Hop", 1)
-    node.set("Threshold", 0.1)
-    node.cook(x[:100])
-    node.set("Threshold", 0.3)
-    got = node.cook(x[100:101]).data
-    f = Periodicity(**per_args(dict(Window=48, Hop=1, Threshold=0.1)))
-    for row in f32(x[:100]):
-        f.process(row)
-    f.threshold = 0.3
-    r = f.process(f32(x[100]))
-    assert r.status == Status.OK
-    want = np.stack([np.stack([r.periods[c], r.powers[c]]) for c in range(2)]).reshape(-1, r.periods.shape[1])
-    assert_close(got, want.T)
-
-
-@pytest.mark.xfail(strict=True, reason="C: a Window change drops the ring buffer; PyEyesWeb keeps the newest samples")
-def test_per_window_change_keeps_newest_samples(plugin):
-    x = PER_SIGNALS["pulses"]().astype(np.float32)
-    node = plugin("Periodicity")
-    node.set("Window", 48)
-    node.set("Hop", 1)
-    node.cook(x[:100])
-    node.set("Window", 32)
-    out = node.cook(x[100:101])
-    assert out.status == OK
+    first = node.cook(x[:64]).data.copy()
+    node.cook(x[64:200])
+    assert_close(node.cook(x[:64]).data, first)
 
 
 def test_per_status_and_edges(plugin):
     node = plugin("Periodicity")
-    out = node.cook(np.ones((50, 1)))              # fewer than Window = 128
-    assert out.status == WARMING_UP and (out.data == -1).all()
-    # no input: -1 everywhere, NO_OUTPUT
-    out = node.cook()
+    out = node.cook(np.ones((5, 1)))                          # too short to be a window
+    assert out.status == WARMING_UP and "Trail CHOP" in out.reason and (out.data == -1).all()
+    out = node.cook(np.ones((50, 1)))                         # constant: no period
+    assert out.status == INVALID_INPUT and (out.data == -1).all()
+    out = node.cook()                                         # no input: -1 everywhere, NO_OUTPUT
     assert out.status == NO_OUTPUT and (out.data == -1).all()
-# ==== Rarity ==========================================================================================================
+
+
+# ==== Rarity (novelty) ===============================================================================================
+# The CHOP is PyEyesWeb's Rarity(method="novelty"); the two EyesWeb / PyEyesWeb methods stay in PyEyesWeb. Parameters are in
+# seconds in the CHOP and in samples in Python: the host cooks at 60 Hz.
+RATE = 60.0
+
+
 def rarity_x(n, channels, seed):
-    return np.random.default_rng(seed).uniform(0, 0.999, (n, channels)).astype(np.float32)
+    """A movement that repeats (a few oscillations of different frequencies) with a little noise, and a change halfway."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(n) / RATE
+    cols = [np.sin(2 * np.pi * (1.0 + 0.3 * c) * t) * (1.0 + 0.5 * c) + 0.05 * rng.standard_normal(n) for c in range(channels)]
+    x = np.column_stack(cols)
+    x[n * 2 // 3:, 0] *= 0.3                                     # a smaller amplitude: new
+    return x.astype(np.float32)
 
 
-RARITY_INFO = [
-    dict(Measure="rarity", Window=50, channels=2),
-    dict(Measure="rarity", Window=12, channels=3),
-    dict(Measure="contrast", Window=50, channels=3),
+def novelty_python(channels, memory_s=5.0, pattern_s=0.5, neighbours=5, shape=False):
+    pattern = max(2, round(pattern_s * RATE))
+    memory = max(3 * pattern, round(memory_s * RATE))
+    return Rarity(method="novelty", number_of_inputs=channels, memory=memory, pattern=pattern, step=max(1, round(pattern / 15.0)),
+                  neighbours=neighbours, shape=shape)
+
+
+def novelty_expected(x, **kw):
+    """The rarity of every sample (0 while warming up, as the CHOP gives it)."""
+    record = novelty_python(x.shape[1], **kw).run(f32(x))
+    return np.nan_to_num(np.asarray(record.rarity, dtype=float))
+
+
+RARITY_SETS = [
+    pytest.param(dict(channels=1), dict(), id="scalar"),
+    pytest.param(dict(channels=2), dict(), id="two-channels"),
+    pytest.param(dict(channels=2), dict(Compare="shape"), id="shape"),
+    pytest.param(dict(channels=1), dict(Neighbours=3, Memory=3.0, Pattern=0.3), id="neighbours3-short"),
 ]
+
+
+def configure(node, pars):
+    for key, value in pars.items():
+        node.set(key, value)
+
+
+def python_kwargs(pars):
+    kw = {}
+    if "Compare" in pars:
+        kw["shape"] = pars["Compare"] == "shape"
+    if "Neighbours" in pars:
+        kw["neighbours"] = pars["Neighbours"]
+    if "Memory" in pars:
+        kw["memory_s"] = pars["Memory"]
+    if "Pattern" in pars:
+        kw["pattern_s"] = pars["Pattern"]
+    return kw
 
 
 def test_rarity_declaration(plugin):
     node = plugin("Rarity")
     declared(node, "Ewrarity", "EW AP Rarity")
     out = node.cook(rarity_x(20, 3, 1))
-    assert out.names == list(Rarity(number_of_inputs=3).outputs.flat_names)
-    assert out.data.shape == (20, 3)
-    node.set("Method", "mode_distance")
-    out = node.cook(rarity_x(20, 3, 1))
-    assert out.names == ["rarity_0", "rarity_1", "rarity_2"] and out.data.shape == (1, 3)
+    assert out.names == ["rarity"] and out.data.shape == (1, 1)         # one sample per cook, whatever the channels
+    names = [p.name for p in node.params]
+    assert {"Memory", "Pattern", "Neighbours", "Compare", "Source", "Reset"} <= set(names)
+    assert node.param("Memory").default == 5.0 and node.param("Pattern").default == 0.5
+    assert node.param("Compare").menu_names == ["values", "shape"]
 
 
-@pytest.mark.parametrize("params", RARITY_INFO)
-@pytest.mark.parametrize("size", [1, 3, 7, 1000])
-def test_rarity_information_parity(plugin, params, size):
-    x = rarity_x(83, params["channels"], 5)
+@pytest.mark.parametrize("size", [1, 2, 7, 1000])
+@pytest.mark.parametrize("info, pars", RARITY_SETS)
+def test_rarity_parity(plugin, info, pars, size):
+    x = rarity_x(900, info["channels"], 3)
     node = plugin("Rarity")
-    node.set("Measure", params["Measure"])
-    node.set("Window", params["Window"])
-    f = Rarity(number_of_inputs=params["channels"], measure=params["Measure"], window=params["Window"])
-    expected = np.array([f.process(r).rarity for r in f32(x)])
-    got = np.vstack([o.data for o in cook_chunks(node, x, size)])
-    assert_close(got, expected, what=str(params))
+    configure(node, pars)
+    expected = novelty_expected(x, **python_kwargs(pars))
+    # every sample feeds the memory; the output of a cook is the rarity of its newest sample
+    for s, out in zip(slices(len(x), size), cook_chunks(node, x, size)):
+        assert out.data.shape == (1, 1)
+        assert_close(out.data[0], expected[s.stop - 1:s.stop], what=f"{info} {pars} chunk end {s.stop}")
 
 
-def test_rarity_information_reset(plugin):
-    x = rarity_x(60, 2, 6)
+@pytest.mark.parametrize("info, pars", RARITY_SETS)
+def test_rarity_clip_gives_one_value_per_sample(plugin, info, pars):
+    x = rarity_x(900, info["channels"], 4)
     node = plugin("Rarity")
-    node.set("Window", 20)
-    first = node.cook(x).data.copy()
-    assert not np.allclose(node.cook(x).data, first)   # the memory is now full of x
-    node.pulse("Reset")
-    assert_close(node.cook(x).data, first, what="Reset forgets the memory")
-
-
-def test_rarity_information_memory_is_structural(plugin):
-    x = rarity_x(60, 2, 7)
-    node = plugin("Rarity")
-    node.set("Window", 20)
-    node.cook(x[:30])
-    node.set("Window", 10)                         # structural: the memory restarts
-    got = node.cook(x[30:]).data
-    f = Rarity(number_of_inputs=2, window=10)
-    assert_close(got, np.array([f.process(r).rarity for r in f32(x[30:])]))
-
-
-def test_rarity_information_warming_up(plugin):
-    node = plugin("Rarity")
-    node.set("Window", 50)
-    out = node.cook(rarity_x(10, 2, 1))
-    f = Rarity(number_of_inputs=2, window=50)
-    assert f.run(f32(rarity_x(10, 2, 1)))[-1].status == Status.WARMING_UP
-    assert out.status == WARMING_UP
-
-
-def test_rarity_information_value_outside_bins(plugin):
-    x = rarity_x(60, 2, 2)
-    x[-1, 0] = 5.0
-    f = Rarity(number_of_inputs=2, window=20)
-    assert f.run(f32(x))[-1].status == Status.INVALID_INPUT
-    node = plugin("Rarity")
-    node.set("Window", 20)
-    assert node.cook(x).status == INVALID_INPUT
-
-
-RARITY_MODE = [dict(Alpha=0.5), dict(Alpha=1.7)]
-
-
-@pytest.mark.parametrize("params", RARITY_MODE)
-@pytest.mark.parametrize("n,channels", [(37, 1), (50, 3), (101, 2)])
-def test_rarity_mode_distance_parity(plugin, params, n, channels):
-    x = rarity_x(n, channels, n)
-    node = plugin("Rarity")
-    node.set("Method", "mode_distance")
-    node.set("Alpha", params["Alpha"])
+    configure(node, pars)
+    node.set("Source", "clip")
     out = node.cook(x)
-    expected = [Rarity(method="mode_distance", window=n, alpha=params["Alpha"]).run(f32(x[:, c]))[-1].rarity for c in range(channels)]
-    assert out.data.shape == (1, channels)
-    assert_close(out.data[0], expected)
+    assert out.data.shape == (900, 1)
+    assert_close(out.data[:, 0], novelty_expected(x, **python_kwargs(pars)), what="clip")
 
 
-def test_rarity_mode_distance_edges(plugin):
+def test_rarity_stream_does_not_need_a_timeslice(plugin):
     node = plugin("Rarity")
-    node.set("Method", "mode_distance")
-    out = node.cook(np.ones((1, 2)))
-    assert not out.data.any()                      # the core has no value for fewer than 2 samples: 0
-    assert out.status == WARMING_UP
+    x = rarity_x(600, 1, 5)
+    out = node.cook(x, timeslice=1)                                  # 600 samples for a slice of 1: fine for this operator
+    assert out.status_name == "OK" and out.data.shape == (1, 1)
+    assert_close(out.data[0], novelty_expected(x)[-1:])
 
 
-def test_rarity_mode_distance_warming_up(plugin):
-    assert Rarity(method="mode_distance", window=2).process(1.0).status == Status.WARMING_UP
+def test_rarity_warming_up_then_ok(plugin):
     node = plugin("Rarity")
-    node.set("Method", "mode_distance")
-    assert node.cook(np.ones((1, 2))).status == WARMING_UP
+    out = node.cook(rarity_x(20, 1, 6))
+    assert out.status == WARMING_UP and not out.data.any()
+    out = node.cook(rarity_x(700, 1, 6))                          # 3.5 x Pattern = 105 samples of warm-up are over
+    assert out.status_name == "OK" and out.data.any()
+
+
+def test_rarity_reset_and_structural_parameters_restart_the_memory(plugin):
+    x = rarity_x(700, 1, 7)
+    node = plugin("Rarity")
+    assert node.cook(x).status_name == "OK"
+    node.pulse("Reset")
+    assert node.cook(x[:20]).status == WARMING_UP
+    assert node.cook(x[20:]).status_name == "OK"
+    node.set("Compare", "shape")                                      # structural: the memory restarts
+    assert node.cook(x[:20]).status == WARMING_UP
+    node.cook(x[20:])
+    node.set("Neighbours", 3)                                         # live: the memory stays
+    assert node.cook(x[:20]).status_name == "OK"
+
+
+def test_rarity_finds_a_pause_a_new_amplitude_and_a_new_frequency(plugin):
+    t = np.arange(20 * 60) / RATE
+    steady = (0.5 + 0.5 * np.sin(2 * np.pi * t)).astype(np.float32)
+    paused = steady.copy()
+    paused[12 * 60:12 * 60 + 30] = 0.5
+    faster = steady.copy()
+    faster[12 * 60:] = (0.5 + 0.5 * np.sin(2 * np.pi * (12.0 + 2.0 * (t[12 * 60:] - 12.0)))).astype(np.float32)
+
+    def peak(x, start, stop):
+        node = plugin("Rarity")
+        node.set("Source", "clip")
+        return float(node.cook(x[:, None]).data[start * 60:stop * 60, 0].max())
+
+    assert peak(steady, 12, 20) < 1.5
+    assert peak(paused, 12, 13) > 3.0 and peak(faster, 12, 13) > 3.0
+
+
+def test_rarity_wrong_input_is_reported(plugin):
+    node = plugin("Rarity")
+    out = node.cook()
+    assert out.status_name == "NO_OUTPUT"
 
 
 # ==== SampleEntropy ===================================================================================================
@@ -452,10 +415,10 @@ def test_se_declaration(plugin):
     node = plugin("SampleEntropy")
     declared(node, "Ewsampleentropy", "EW AP Sample Entropy")
     out = node.cook(data.noisy_sine(60))
-    assert out.names == list(SampleEntropy(window=60, embedding_dimension=2).outputs.flat_names)
-    node.set("Embeddingdimension", 4)
     out = node.cook(data.noisy_sine(60))
-    assert out.names == list(SampleEntropy(window=60, embedding_dimension=4).outputs.flat_names) and out.data.shape == (1, 4)
+    assert out.names == ["sample_entropy"] and out.data.shape == (1, 1)      # one value: SampEn(m, r), m = Embeddingdimension
+    node.set("Embeddingdimension", 4)
+    assert node.cook(data.noisy_sine(60)).data.shape == (1, 1)
 
 
 @pytest.mark.parametrize("params", SE_PARAMS)
@@ -468,19 +431,20 @@ def test_se_parity(plugin, signal, params):
     for k, v in params.items():
         node.set(k, v)
     out = node.cook(x)
+    # one value, SampEn(m, r), on both sides (m = Embeddingdimension = embedding_dimension)
     f = SampleEntropy(window=len(x), embedding_dimension=params["Embeddingdimension"], tolerance=params["Tolerance"])
     assert out.status == OK
-    assert_close(out.data[0], f.run(f32(x))[-1].sample_entropy)
+    assert_close(out.data[0], [f.run(f32(x))[-1].sample_entropy])
     relative = plugin("SampleEntropy")
     relative.set("Embeddingdimension", params["Embeddingdimension"])
     relative.set("Relativetolerance", params["Tolerance"])
     g = SampleEntropy(window=len(x), embedding_dimension=params["Embeddingdimension"], relative_tolerance=params["Tolerance"])
-    assert_close(relative.cook(x).data[0], g.run(f32(x))[-1].sample_entropy)
+    assert_close(relative.cook(x).data[0], [g.run(f32(x))[-1].sample_entropy])
 
 
 def test_se_edges(plugin):
     node = plugin("SampleEntropy")
-    out = node.cook(np.ones(2))                    # not more than Embeddingdim = 2 samples
+    out = node.cook(np.ones(3))                    # not more than m + 1 = 3 samples
     assert out.status == INVALID_INPUT and out.warning and not out.data.any()
     with pytest.raises(ValueError):                # PyEyesWeb refuses the window at construction
         SampleEntropy(window=2, embedding_dimension=2)
@@ -586,17 +550,18 @@ def _nan(x, index):
 
 
 NAN_CASES = {
-    "BinaryPulsesRegularity": (dict(Window=30), lambda: _nan(data.pulse_train(40, period=5), 12),
+    "BinaryPulsesRegularity": (dict(), lambda: _nan(data.pulse_train(40, period=5), 12),
                                lambda: BinaryPulsesRegularity(window=30)),
     "MultiScaleEntropy": (dict(), lambda: _nan(data.noisy_sine(200, noise=0.5), 50), lambda: MultiScaleEntropy(window=200, minimum_points=30)),
-    "Periodicity": (dict(Window=40, Hop=1), lambda: _nan(data.noisy_sine(60), 50), lambda: Periodicity(window=40, threshold=0.1, best_periods=3)),
-    "Rarity": (dict(Window=20), lambda: _nan(rarity_x(30, 2, 1), (5, 0)), lambda: Rarity(number_of_inputs=2, window=20)),
+    "Periodicity": (dict(), lambda: _nan(data.noisy_sine(60), 50), lambda: Periodicity(window=40, threshold=0.1, best_periods=3)),
+    "Rarity": (dict(Memory=0.5, Pattern=0.1), lambda: _nan(rarity_x(30, 2, 1), (5, 0)),
+               lambda: Rarity(method="novelty", number_of_inputs=2, memory=30, pattern=6)),
     "SampleEntropy": (dict(), lambda: _nan(data.noisy_sine(60), 20), lambda: SampleEntropy(window=60, embedding_dimension=2, tolerance=0.2)),
     "ScalarPeakDetector": (dict(), lambda: _nan(data.noisy_sine(30), 10), lambda: ScalarPeakDetector()),
 }
 
 
-SAMPLE_WISE = {"BinaryPulsesRegularity": None, "Periodicity": None, "Rarity": 5, "ScalarPeakDetector": 10}
+SAMPLE_WISE = {"Rarity": None, "ScalarPeakDetector": 10}   # Rarity: one sample out
 
 
 @pytest.mark.parametrize("name", NAN_CASES)
@@ -612,19 +577,9 @@ def test_nan_input_is_invalid(plugin, name):
         node.set(k, v)
     out = node.cook(x)
     assert out.status == INVALID_INPUT and out.warning
-    if name not in SAMPLE_WISE:
+    if name == "Periodicity":                                # -1 = no period, its "nothing" value
+        assert (out.data == -1).all()
+    elif name not in SAMPLE_WISE:
         assert not np.nan_to_num(out.data).any()
     elif SAMPLE_WISE[name] is not None:
         assert not np.nan_to_num(out.data[SAMPLE_WISE[name]]).any()
-
-
-def test_rarity_information_bins(plugin):
-    # Bin widths of the `information` method, in the units of the signal (PyEyesWeb `bins`).
-    x = 3.0 * rarity_x(83, 2, 5)  # a signal in 0 to 3 needs bins that add up to 3
-    node = plugin("Rarity")
-    node.set("Window", 20)
-    node.set("Bins", "0.5 1 1.5")
-    f = Rarity(number_of_inputs=2, window=20, bins=(0.5, 1.0, 1.5))
-    expected = np.array([f.process(r).rarity for r in f32(x)])
-    got = np.vstack([o.data for o in cook_chunks(node, x, 1000)])
-    assert_close(got, expected, what="bins")

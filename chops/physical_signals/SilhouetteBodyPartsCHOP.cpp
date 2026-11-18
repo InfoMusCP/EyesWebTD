@@ -1,8 +1,8 @@
 // TouchDesigner Silhouette Body Parts CHOP - wraps ew::imaging::BlobSubRegions (PyEyesWeb SilhouetteBodyParts).
 // Head, trunk, arms and legs of a human silhouette, from its projection histograms.
 //
-// Input: a TOP holding the silhouette (any non-zero pixel is body, see Threshold). The TOP is the wired input 0 when it
-//   is a TOP, otherwise the TOP named by the Top parameter. Read as TouchDesigner gives it (one 8-bit channel, first row on top; see ew_td/top_mask.h):
+// Input: a TOP holding the silhouette, named by the Top parameter (a TOP cannot be wired into a CHOP). It is a binary mask,
+//   thresholded by the user before the operator (a Threshold TOP); the pixels are used as they are. Read as TouchDesigner gives it (one 8-bit channel, first row on top; see ew_td/top_mask.h):
 //   rows from the TOP of the image downwards, x to the right, y downward, in pixels of the frame, as in PyEyesWeb. A
 //   colour TOP is read through its red channel: feed it a grayscale mask.
 // Output: one sample, 30 channels (the PyEyesWeb flat names, parts in the order left_leg, right_leg, trunk, left_arm,
@@ -12,12 +12,10 @@
 //   The per-part masks of PyEyesWeb (output `masks`) are images: they have no CHOP form and are not output. A part is
 //   dropped when it is empty (EyesWeb also dropped a part touching the first column or row of the frame).
 // Parameters: Armpercentage, Legssearch, Legsoffset, Armsminthreshold, Armsmaxthreshold, one toggle per part (Leftleg,
-//   Rightleg, Trunk, Leftarm, Rightarm, Head; PyEyesWeb `parts`), Threshold (see below).
+//   Rightleg, Trunk, Leftarm, Rightarm, Head; PyEyesWeb `parts`).
 // Kind: frame (the block keeps nothing between cooks), so there is no Reset.
 // Statuses: a mask without foreground is INVALID_INPUT ("no foreground pixels in the silhouette"), the outputs stay zero;
 //   no TOP, or a TOP that cannot be read, is INVALID_INPUT too. Otherwise OK (no warm-up).
-// Difference from PyEyesWeb: Threshold (default 0) makes the foreground the pixels above it, in the 0-1 range of the TOP;
-//   at 0 it is "non-zero", as PyEyesWeb.
 #include <cstring>
 #include <string>
 #include <vector>
@@ -61,7 +59,6 @@ public:
 
     void declareParameters(Params& p) override {
         p.page("Silhouette");
-        p.number("Threshold", "Threshold", 0.0, Range::between(0, 1));
         p.number("Armpercentage", "Arm Percentage", 0.8, Range::atLeast(0, 1));
         p.number("Legssearch", "Legs Search", 0.5, Range::atLeast(0, 1));
         p.number("Legsoffset", "Legs Offset", 0.2, Range::atLeast(0, 1));
@@ -72,7 +69,7 @@ public:
     }
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
-        const TopMask mask(in, in->getParDouble("Threshold"));
+        const TopMask mask(in);
         const ew::Blob2D blob = ew::blobFromMask(mask.view());
         if (blob.mask.empty()) {
             setStatus(Status::InvalidInput, "no foreground pixels in the silhouette");
@@ -118,4 +115,4 @@ private:
 
 constexpr SilhouetteBodyPartsCHOP::Part SilhouetteBodyPartsCHOP::kParts[];
 
-EW_TD_CHOP(SilhouetteBodyPartsCHOP, "Ewsilhouettebodyparts", "EW L1 Silhouette Body Parts", 0, 1)
+EW_TD_CHOP(SilhouetteBodyPartsCHOP, "Ewsilhouettebodyparts", "EW L1 Silhouette Body Parts", 0, 0)

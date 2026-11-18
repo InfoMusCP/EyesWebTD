@@ -3,8 +3,8 @@
 The images reach the operators as TOPs of the mock host (ewhost.Image: row 0 on top, 8-bit or float32), and the operators
 read them with OP_TOPInput::downloadTexture, flipped so that row 0 is the top of the image, as in PyEyesWeb. Both sides see the
 same pixels. The outputs that are images in PyEyesWeb are carried as follows (see the header of each operator):
-  * SilhouetteCentroids / SilhouetteBodyParts: the numbers of `centroids`, `normalized`, `regions`, `is_found` as channels of
-    one sample; the per-part `masks` have no CHOP form;
+  * SilhouetteCentroids / SilhouetteBodyParts: the numbers of `centroids` (the CHOP has no `normalized`: the user divides by
+    the size of the image), `regions`, `is_found` as channels of one sample; the per-part `masks` have no CHOP form;
   * Videogram: the videogram image of shape (H, window, C) as `window` samples of H * C channels (channel h * C + c at sample s
     is image[h, s, c]; vertical mode: image[s, w, c]).
 A centroid that is absent is NaN on both sides; the regions of parts that were not found are 0 on both sides.
@@ -66,15 +66,15 @@ def assert_top_invalid(out, reason=None):
 
 # ======================================================================================================== SilhouetteCentroids
 def centroid_row(result):
-    """PyEyesWeb centroids then normalized, flattened as the channels of the CHOP."""
-    return np.concatenate([np.asarray(result.centroids, float).ravel(), np.asarray(result.normalized, float).ravel()])
+    """PyEyesWeb centroids, flattened as the channels of the CHOP (the `normalized` of PyEyesWeb is left to the user)."""
+    return np.asarray(result.centroids, float).ravel()
 
 
 def centroids_parity(node, mask, **kw):
     feature = SilhouetteCentroids(**kw)
     expected = centroid_row(feature.process(u8(mask)))
-    out = node.cook(Image(u8(mask)))
-    assert out.data.shape == (1, 56)
+    out = node.cook(tops={"Top": Image(u8(mask))})
+    assert out.data.shape == (1, 28)
     assert_close(out.data[0], expected, what=str(kw))
     return out
 
@@ -82,14 +82,15 @@ def centroids_parity(node, mask, **kw):
 def test_centroids_declaration(plugin):
     node = plugin("SilhouetteCentroids")
     assert (node.op_type, node.op_label) == ("Ewsilhouettecentroids", "EW L1 Silhouette Centroids")
-    assert (node.min_inputs, node.max_inputs) == (0, 1)
+    assert (node.min_inputs, node.max_inputs) == (0, 0)             # the TOP is the Top parameter: no input
     assert not [i for i in node.setup_issues if i.startswith("error")]
-    out = node.cook(Image(u8(figure())))
-    assert tuple(out.names) == SilhouetteCentroids._OUTPUTS.flat_names and len(out.names) == 56
-    assert out.names[0] == "centroids_center_of_gravity_x" and out.names[28] == "normalized_center_of_gravity_x"
+    out = node.cook(tops={"Top": Image(u8(figure()))})
+    assert tuple(out.names) == tuple(SilhouetteCentroids._OUTPUTS.flat_names) and len(out.names) == 28
+    assert out.names[0] == "centroids_center_of_gravity_x"
     assert out.num_samples == 1 and out.status_name == "OK" and out.warning == ""
     names = [p.name for p in node.params]
-    assert {"Top", "Threshold", "Silhouette", "Filtercentroids", "Alpha", "Addintermediatecentroids", "Reset"} <= set(names)
+    assert {"Top", "Silhouette", "Filtercentroids", "Alpha", "Addintermediatecentroids", "Reset"} <= set(names)
+    assert "Threshold" not in names                               # thresholding is left to the user (a Threshold TOP)
     assert [par(label) in names for label in LABELS] == [True] * 14
     assert node.param("Silhouette").default == "full" and node.param("Alpha").default == 0.75
     assert node.param("Silhouette").menu_names == ["full", "upper", "lower", "left", "right"]
@@ -138,7 +139,7 @@ def test_centroids_filter_sequence_matches_pyeyesweb(plugin):
     for k in range(12):
         mask = figure(shift=3 * k - 15, arm_row=60 + 4 * k)
         expected = centroid_row(feature.process(u8(mask)))
-        assert_close(node.cook(Image(u8(mask))).data[0], expected, what=f"frame {k}")
+        assert_close(node.cook(tops={"Top": Image(u8(mask))}).data[0], expected, what=f"frame {k}")
 
 
 def test_centroids_state_reset_and_parameter_changes(plugin):
@@ -148,73 +149,60 @@ def test_centroids_state_reset_and_parameter_changes(plugin):
     frames = [u8(figure(shift=4 * k - 20, arm_row=60 + 5 * k)) for k in range(8)]
     reference = SilhouetteCentroids(filter_centroids=True, alpha=0.4)
     for frame in frames[:4]:
-        node.cook(Image(frame))
+        node.cook(tops={"Top": Image(frame)})
         reference.process(frame)
     # a live parameter (alpha) keeps the filters
     node.set("Alpha", 0.9)
     reference.alpha = 0.9
-    assert_close(node.cook(Image(frames[4])).data[0], centroid_row(reference.process(frames[4])), what="alpha changed live")
+    assert_close(node.cook(tops={"Top": Image(frames[4])}).data[0], centroid_row(reference.process(frames[4])), what="alpha changed live")
     # Reset forgets them: the next frame passes through unfiltered, like a new feature
     node.pulse("Reset")
     fresh = SilhouetteCentroids(filter_centroids=True, alpha=0.9)
-    assert_close(node.cook(Image(frames[5])).data[0], centroid_row(fresh.process(frames[5])), what="after Reset")
-    assert node.cook(Image(frames[6])).dat("resets") == "1"
+    assert_close(node.cook(tops={"Top": Image(frames[5])}).data[0], centroid_row(fresh.process(frames[5])), what="after Reset")
+    assert node.cook(tops={"Top": Image(frames[6])}).dat("resets") == "1"
     # a structural parameter (silhouette) restarts the filters
     node.set("Silhouette", "upper")
     fresh = SilhouetteCentroids(filter_centroids=True, alpha=0.9, silhouette="upper")
-    assert_close(node.cook(Image(frames[7])).data[0], centroid_row(fresh.process(frames[7])), what="silhouette changed")
+    assert_close(node.cook(tops={"Top": Image(frames[7])}).data[0], centroid_row(fresh.process(frames[7])), what="silhouette changed")
 
 
 def test_centroids_filter_off_has_no_memory(plugin):
     node = plugin("SilhouetteCentroids")
     a, b = u8(SILHOUETTES["figure"]), u8(SILHOUETTES["arms_low"])
-    first = node.cook(Image(b)).data.copy()
-    node.cook(Image(a))
-    assert np.array_equal(node.cook(Image(b)).data, first, equal_nan=True)
+    first = node.cook(tops={"Top": Image(b)}).data.copy()
+    node.cook(tops={"Top": Image(a)})
+    assert np.array_equal(node.cook(tops={"Top": Image(b)}).data, first, equal_nan=True)
 
 
 def test_centroids_orientation_is_top_down_in_pixels(plugin):
     node = plugin("SilhouetteCentroids")
     mask = np.zeros((20, 30), np.uint8)
     mask[2:6, 20:24] = 255                                       # near the top, to the right
-    out = node.cook(Image(mask))
-    x, y, nx, ny = out.data[0, 0], out.data[0, 1], out.data[0, 28], out.data[0, 29]
+    out = node.cook(tops={"Top": Image(mask)})
+    x, y = out.data[0, 0], out.data[0, 1]
     assert (x, y) == (21.0, 3.0)                                 # y = 3: counted from the TOP of the image
-    assert_close([nx, ny], [21 / 30, 3 / 20], what="normalized")
 
 
 def test_centroids_input_forms_give_the_same_result(plugin):
     node = plugin("SilhouetteCentroids")
     mask = SILHOUETTES["figure"]
-    reference = node.cook(Image(u8(mask))).data.copy()
+    reference = node.cook(tops={"Top": Image(u8(mask))}).data.copy()
     for image in (Image(mask), Image(mask.astype(np.float32)), Image(np.dstack([u8(mask)] * 3)),
                   Image(np.dstack([u8(mask), np.zeros_like(u8(mask)), np.zeros_like(u8(mask)), u8(mask)]))):
-        assert np.array_equal(node.cook(image).data, reference, equal_nan=True)
-    # the TOP given to the Top parameter instead of a wired input
+        assert np.array_equal(node.cook(tops={"Top": image}).data, reference, equal_nan=True)
     assert np.array_equal(node.cook(tops={"Top": Image(u8(mask))}).data, reference, equal_nan=True)
-
-
-def test_centroids_threshold(plugin):
-    node = plugin("SilhouetteCentroids")
-    yy, xx = np.mgrid[:60, :80]
-    gradient = (xx / 79.0).astype(np.float32) * (yy < 40)          # 0 .. 1 left to right, only the upper rows
-    expected = centroid_row(SilhouetteCentroids().process(u8(gradient > 0.5)))
-    node.set("Threshold", 0.5)
-    assert_close(node.cook(Image(gradient)).data[0], expected, what="threshold 0.5")
-    node.set("Threshold", 0)                                        # default: non-zero is foreground, as PyEyesWeb
-    assert_close(node.cook(Image(gradient)).data[0], centroid_row(SilhouetteCentroids().process(u8(gradient > 0))), what="threshold 0")
 
 
 def test_centroids_statuses(plugin):
     node = plugin("SilhouetteCentroids")
     result = SilhouetteCentroids().process(np.zeros((10, 10), np.uint8))
     assert result.status == Status.INVALID_INPUT and result.reason == "no foreground pixels in the silhouette"
-    out = node.cook(Image(np.zeros((10, 10), np.uint8)))
+    out = node.cook(tops={"Top": Image(np.zeros((10, 10), np.uint8))})
     assert_top_invalid(out, result.reason)
-    assert out.data.shape == (1, 56)
+    assert out.data.shape == (1, 28)
     assert_top_invalid(node.cook(), "no TOP")                      # nothing connected
-    assert node.cook(Image(u8(figure()))).status_name == "OK"      # recovers on the next frame
-    assert_top_invalid(node.cook(Image(np.zeros((4, 4), np.float32) + np.float32(np.nan))), "no foreground")   # NaN is no foreground
+    assert node.cook(tops={"Top": Image(u8(figure()))}).status_name == "OK"      # recovers on the next frame
+    assert_top_invalid(node.cook(tops={"Top": Image(np.zeros((4, 4), np.float32) + np.float32(np.nan))}), "no foreground")   # NaN is no foreground
 
 
 def test_centroids_invalid_frame_does_not_disturb_the_filters(plugin):
@@ -226,7 +214,7 @@ def test_centroids_invalid_frame_does_not_disturb_the_filters(plugin):
     blank = np.zeros((240, 320), np.uint8)
     for frame in (frames[0], blank, frames[1], blank, frames[2]):
         result = feature.process(frame)
-        out = node.cook(Image(frame))
+        out = node.cook(tops={"Top": Image(frame)})
         if result.status == Status.OK:
             assert_close(out.data[0], centroid_row(result))
         else:
@@ -247,7 +235,7 @@ def regions_row(result):
 
 def bodyparts_parity(node, mask, **kw):
     expected = regions_row(SilhouetteBodyParts(**kw).process(u8(mask)))
-    out = node.cook(Image(u8(mask)))
+    out = node.cook(tops={"Top": Image(u8(mask))})
     assert out.data.shape == (1, 30)
     assert_close(out.data[0], expected, what=str(kw))
     return out
@@ -256,14 +244,15 @@ def bodyparts_parity(node, mask, **kw):
 def test_bodyparts_declaration(plugin):
     node = plugin("SilhouetteBodyParts")
     assert (node.op_type, node.op_label) == ("Ewsilhouettebodyparts", "EW L1 Silhouette Body Parts")
-    assert (node.min_inputs, node.max_inputs) == (0, 1)
+    assert (node.min_inputs, node.max_inputs) == (0, 0)             # the TOP is the Top parameter: no input
     assert not [i for i in node.setup_issues if i.startswith("error")]
-    out = node.cook(Image(u8(figure())))
+    out = node.cook(tops={"Top": Image(u8(figure()))})
     names = SilhouetteBodyParts._OUTPUTS.flat_names                 # the fixed outputs: regions and is_found (masks are images)
     assert tuple(out.names) == names and len(names) == 30 and not any(n.startswith("masks") for n in out.names)
     assert out.names[0] == "regions_left_leg_x" and out.names[24] == "is_found_left_leg"
     pnames = [p.name for p in node.params]
-    assert {"Top", "Threshold", "Armpercentage", "Legssearch", "Legsoffset", "Armsminthreshold", "Armsmaxthreshold"} <= set(pnames)
+    assert {"Top", "Armpercentage", "Legssearch", "Legsoffset", "Armsminthreshold", "Armsmaxthreshold"} <= set(pnames)
+    assert "Threshold" not in pnames
     assert all(par(p) in pnames for p in PARTS)
     assert "Reset" not in pnames and "Source" not in pnames        # a frame operator keeps nothing
     defaults = {p.name: p.default for p in node.params}
@@ -308,40 +297,31 @@ def test_bodyparts_a_part_at_the_frame_border_is_found_like_pyeyesweb(plugin):
 
 def test_bodyparts_is_stateless_and_follows_each_frame(plugin):
     node = plugin("SilhouetteBodyParts")
-    first = node.cook(Image(u8(SILHOUETTES["figure"]))).data.copy()
+    first = node.cook(tops={"Top": Image(u8(SILHOUETTES["figure"]))}).data.copy()
     for name in ("blob1", "arms_low", "blob2", "figure"):
         bodyparts_parity(node, SILHOUETTES[name])
-    assert np.array_equal(node.cook(Image(u8(SILHOUETTES["figure"]))).data, first)
+    assert np.array_equal(node.cook(tops={"Top": Image(u8(SILHOUETTES["figure"]))}).data, first)
 
 
 def test_bodyparts_orientation_and_input_forms(plugin):
     node = plugin("SilhouetteBodyParts")
     mask = SILHOUETTES["figure"]
-    reference = node.cook(Image(u8(mask))).data.copy()
+    reference = node.cook(tops={"Top": Image(u8(mask))}).data.copy()
     assert reference[0, 20 + 1] < 60                                # the head (columns 20..23 = head x, y, w, h): near the top
-    flipped = node.cook(Image(u8(mask[::-1]))).data
+    flipped = node.cook(tops={"Top": Image(u8(mask[::-1]))}).data
     assert not np.array_equal(flipped, reference)                   # the image is not read upside down
     for image in (Image(mask), Image(mask.astype(np.float32)), Image(np.dstack([u8(mask)] * 3))):
-        assert np.array_equal(node.cook(image).data, reference)
+        assert np.array_equal(node.cook(tops={"Top": image}).data, reference)
     assert np.array_equal(node.cook(tops={"Top": Image(u8(mask))}).data, reference)
-
-
-def test_bodyparts_threshold(plugin):
-    node = plugin("SilhouetteBodyParts")
-    soft = SILHOUETTES["figure"].astype(np.float32) * 0.8 + SILHOUETTES["figure"].astype(np.float32) * 0.0
-    soft[:, :150] *= 0.25                                          # the left part of the picture is dim
-    node.set("Threshold", 0.5)
-    expected = regions_row(SilhouetteBodyParts().process(u8(soft > 0.5)))
-    assert_close(node.cook(Image(soft)).data[0], expected, what="threshold 0.5")
 
 
 def test_bodyparts_statuses(plugin):
     node = plugin("SilhouetteBodyParts")
     result = SilhouetteBodyParts().process(np.zeros((10, 10), np.uint8))
     assert result.status == Status.INVALID_INPUT and result.reason == "no foreground pixels in the silhouette"
-    assert_top_invalid(node.cook(Image(np.zeros((10, 10), np.uint8))), result.reason)
+    assert_top_invalid(node.cook(tops={"Top": Image(np.zeros((10, 10), np.uint8))}), result.reason)
     assert_top_invalid(node.cook(), "no TOP")
-    assert node.cook(Image(u8(figure()))).status_name == "OK"
+    assert node.cook(tops={"Top": Image(u8(figure()))}).status_name == "OK"
 
 
 def test_bodyparts_edges_do_not_crash(plugin):

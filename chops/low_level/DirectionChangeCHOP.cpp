@@ -34,7 +34,7 @@ public:
         const InputView input = chopInput(in);
         const int dims = input.channels();
         require(dims >= 2 && dims <= 3, "DirectionChange requires 2 or 3 channels (x, y [, z])");
-        if (input.samples() < 3) return warmingUp(input.samples(), 3);
+        if (input.samples() < 3) return windowTooShort(input.samples(), 3);
         requireFinite(input);
 
         ew::Matrix trajectory(input.samples(), dims);

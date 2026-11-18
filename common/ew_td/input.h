@@ -2,6 +2,7 @@
 // Channel layout of a skeleton is joint-major: joint j, axis d is channel j * dims + d (x, y, z of joint 0, then joint 1...).
 #pragma once
 #include <cmath>
+#include <memory>
 #include <string>
 #include <vector>
 #include "CPlusPlus_Common.h"
@@ -18,11 +19,31 @@ class InputView {
 public:
     explicit InputView(const TD::OP_CHOPInput* input) : input_(input) {}
 
-    int channels() const { return input_->numChannels; }
-    int samples() const { return input_->numSamples; }
-    double sampleRate() const { return input_->sampleRate > 0 ? input_->sampleRate : kDefaultSampleRate; }
+    // A window the operator owns: `data` holds channel after channel, `samples` per channel.
+    static InputView owned(int channels, int samples, double sampleRate, std::vector<float> data) {
+        InputView view(nullptr);
+        view.own_ = std::make_shared<Owned>(Owned{channels, samples, sampleRate, std::move(data)});
+        return view;
+    }
+
+    // The same input seen from sample `first` on (sample 0 of the view is sample `first` of the input).
+    InputView from(int first) const {
+        InputView view(*this);
+        view.first_ = first_ + (first > 0 ? first : 0);
+        return view;
+    }
+
+    int channels() const { return own_ ? own_->channels : input_->numChannels; }
+    int samples() const { return (own_ ? own_->samples : input_->numSamples) - first_; }
+    double sampleRate() const {
+        const double rate = own_ ? own_->sampleRate : input_->sampleRate;
+        return rate > 0 ? rate : kDefaultSampleRate;
+    }
     double dt() const { return 1.0 / sampleRate(); }  // seconds between two samples
-    double at(int channel, int sample) const { return input_->getChannelData(channel)[sample]; }
+    double at(int channel, int sample) const {
+        if (own_) return own_->data[static_cast<size_t>(channel) * own_->samples + first_ + sample];
+        return input_->getChannelData(channel)[first_ + sample];
+    }
 
     // Whether every channel of `sample` holds a finite number (PyEyesWeb: a NaN or infinity is not data).
     bool finite(int sample) const {
@@ -38,7 +59,14 @@ public:
     }
 
 private:
+    struct Owned {
+        int channels, samples;
+        double sampleRate;
+        std::vector<float> data;
+    };
     const TD::OP_CHOPInput* input_;
+    std::shared_ptr<const Owned> own_;
+    int first_ = 0;
 };
 
 // The CHOP input `index` (null when the slot is empty or holds something else, e.g. a TOP).

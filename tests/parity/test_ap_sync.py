@@ -255,67 +255,38 @@ def test_spike_edges(plugin):
     assert out.status_name == "INVALID_INPUT" and out.warning and not out.data.any()
 
 
-# ---- EventSynchronization (buffer with state) -------------------------------------------------------------------
-def es_chunks(node, x, size):
-    return [node.cook(f32(x[i:i + size])) for i in range(0, len(x), size)]
+# ---- EventSynchronization (the input is the window) --------------------------------------------------------------
+# One result per cook for the trains of the input (a Trail CHOP of the events), nothing kept: PyEyesWeb with a window of the
+# same samples and reset_every_buffer.
+def es_expected(x, **kw):
+    feature = EventSynchronization(window=len(x), reset_every_buffer=True, **kw)
+    results = [r for r in (feature.process(*row) for row in x) if r.status is Status.OK]
+    return [results[-1].synchronization, results[-1].delay]
 
 
-@pytest.mark.parametrize("pars,kw", [
-    ({}, dict()),
-    ({"Maxlag": 3}, dict(max_lag=3)),
-    ({"Maxlag": 4, "Reseteverybuffer": 1}, dict(max_lag=4, reset_every_buffer=True)),
-])
-def test_event_sync_stream_of_buffers(plugin, pars, kw):
+@pytest.mark.parametrize("pars,kw", [({}, dict()), ({"Maxlag": 3}, dict(max_lag=3)), ({"Maxlag": 8}, dict(max_lag=8))])
+@pytest.mark.parametrize("length", [17, 40])
+def test_event_sync_window(plugin, pars, kw, length):
     node = plugin("EventSynchronization")
     declared(node, "Eweventsynchronization", "EW AP Event Synchronization")
     for key, value in pars.items():
         node.set(key, value)
-    size, count = 17, 4
-    x = trains(size * count, 2, 3, 0.3)
-    outs = es_chunks(node, x, size)
-    feature = EventSynchronization(window=size, **kw)
-    results = [r for r in (feature.process(*row) for row in x) if r.status is Status.OK]
-    assert len(results) == count
-    assert outs[0].names == ["synchronization", "delay"]
-    for out, res in zip(outs, results):
-        assert out.status_name == "OK"
-        assert_close(out.data[0], [res.synchronization, res.delay])
+    x = trains(160, 2, 3, 0.3)
+    for end in range(length, len(x) + 1, 11):                  # a sliding window, as a Trail CHOP gives it
+        window = x[end - length:end]
+        out = node.cook(f32(window))
+        assert out.names == ["synchronization", "delay"] and out.status_name == "OK"
+        assert_close(out.data[0], es_expected(window, **kw), what=f"{pars} window ending at {end}")
 
 
-def test_event_sync_state(plugin):
+def test_event_sync_nothing_is_kept_between_cooks(plugin):
     node = plugin("EventSynchronization")
     x = trains(60, 2, 5, 0.3)
-    a = [o.data[0].copy() for o in es_chunks(node, x, 20)]
-    node.pulse("Reset")
-    b = [o.data[0].copy() for o in es_chunks(node, x, 20)]
-    assert_close(b, a)  # Reset forgets the queued events
-    # no Reset: the second pass starts from the state left by the first
-    node.reset_instance()
-    first, again = (node.cook(f32(x[:20])).data[0].copy() for _ in range(2))
-    feature = EventSynchronization(window=20)
-    ref = [r for r in (feature.process(*row) for row in np.vstack([x[:20], x[:20]])) if r.status is Status.OK]
-    assert_close(first, [ref[0].synchronization, ref[0].delay])
-    assert_close(again, [ref[1].synchronization, ref[1].delay])
-
-
-def test_event_sync_live_and_structural_parameters(plugin):
-    x = trains(60, 2, 6, 0.3)
-    # Maxlag is LIVE: the state is kept
-    node, ref = plugin("EventSynchronization"), plugin("EventSynchronization")
-    node.cook(f32(x[:20]))
-    node.set("Maxlag", 2)
-    got = node.cook(f32(x[20:40])).data[0]
-    feature = EventSynchronization(window=20, max_lag=5)
-    last(feature, pairs(x[:20]))
-    feature.max_lag = 2
-    res = last(feature, pairs(x[20:40]))
-    assert_close(got, [res.synchronization, res.delay])
-    # Reset Every Buffer is STRUCTURAL: the state is dropped
-    node.set("Reseteverybuffer", 1)
-    got = node.cook(f32(x[40:60])).data[0]
-    fresh = EventSynchronization(window=20, max_lag=2, reset_every_buffer=True)
-    res = last(fresh, pairs(x[40:60]))
-    assert_close(got, [res.synchronization, res.delay])
+    first = node.cook(f32(x[:20])).data.copy()
+    node.cook(f32(x[20:40]))
+    assert_close(node.cook(f32(x[:20])).data, first)
+    names = [p.name for p in node.params]
+    assert "Reseteverybuffer" not in names and "Reset" not in names
 
 
 def test_event_sync_edges(plugin):
@@ -347,30 +318,28 @@ def test_mecs(plugin, pars, kw, k, c):
         node.set(key, value)
     if "kernel" in kw:
         kw["kernel"] = getattr(core.sync.MECSKernel, kw["kernel"].upper())
-    size, count = 23, 3
-    x = mecs_data(size * count, k, c, 7)
-    feature = EventSynchronizationMECS(window=size, **kw)
-    results = []
-    for row in x:
-        r = feature.process(*[row[s * c:(s + 1) * c] for s in range(k)])
-        if r.status is Status.OK:
-            results.append(r)
-    assert len(results) == count
-    for i, res in enumerate(results):
-        out = node.cook(f32(x[i * size:(i + 1) * size]))
+    # the input is the window: each one alone, as a fresh PyEyesWeb feature with a window of the same samples
+    size = 23
+    x = mecs_data(90, k, c, 7)
+    for end in range(size, len(x) + 1, 7):                   # a sliding window, as a Trail CHOP gives it
+        window = x[end - size:end]
+        feature = EventSynchronizationMECS(window=size, **kw)
+        res = [feature.process(*[row[s * c:(s + 1) * c] for s in range(k)]) for row in window][-1]
+        assert res.status is Status.OK
+        out = node.cook(f32(window))
         assert out.names == list(feature.outputs.flat_names)
         assert out.status_name == "OK"
         assert_close(out.data[0], np.concatenate([np.ravel(res.synchronization), np.ravel(res.events)]))
 
 
-def test_mecs_state_and_edges(plugin):
+def test_mecs_nothing_is_kept_and_edges(plugin):
     node = plugin("EventSynchronizationMECS")
     node.set("Numberofeventclasses", 2)
     x = f32(mecs_data(60, 2, 2, 9))
-    a = [node.cook(x[i:i + 20]).data[0].copy() for i in range(0, 60, 20)]
-    node.pulse("Reset")
-    b = [node.cook(x[i:i + 20]).data[0].copy() for i in range(0, 60, 20)]
-    assert_close(b, a)
+    first = node.cook(x[:20]).data.copy()
+    node.cook(x[20:40])
+    assert_close(node.cook(x[:20]).data, first)
+    assert "Reset" not in [p.name for p in node.params]
     out = node.cook(x[:20, :3])  # needs Numseries * Classes = 4 channels
     assert out.status_name == "INVALID_INPUT" and out.warning and not out.data.any()
 

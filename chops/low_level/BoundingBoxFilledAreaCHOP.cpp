@@ -25,7 +25,7 @@ public:
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
         if (!checkSlice(out, in)) return;
-        const InputView input = chopInput(in);
+        const InputView input = sampleInput(in);
         require(input.channels() % 3 == 0, "Input channel count must be a multiple of 3 (x, y, z triplets)");
         const int points = input.channels() / 3;
 

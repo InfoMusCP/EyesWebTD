@@ -1,0 +1,108 @@
+---
+import Base from '../layouts/Base.astro';
+import NetworkDiagram from '../components/NetworkDiagram.astro';
+import { operators, layerOrder, byLayer, tagOrder } from '../data/index';
+import { layerInfo, kindInfo, tagInfo } from '../data/types';
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const count = (s: string) => operators.filter((o) => o.state === s).length;
+---
+<Base title="Catalog" section="catalog">
+  <section class="home-hero">
+    <span class="eyebrow">EyesWeb for TouchDesigner · {operators.length} CHOPs</span>
+    <h1>Read the body.<br /><em>Patch the meaning.</em></h1>
+    <p>Native C++ CHOPs that turn poses, silhouettes and trajectories into expressive features: energy, smoothness, symmetry, synchrony, rarity. Every page tells you exactly what goes in, what comes out, and how to wire it.</p>
+    <div class="cta">
+      <a class="btn primary" href={`${base}start`}>Get started →</a>
+      <a class="btn" href={`${base}concepts`}>How the operators think</a>
+    </div>
+  </section>
+
+  <div class="stats">
+    {layerOrder.map((l) => (
+      <div class={`stat ${l}`}><b>{byLayer(l).length}</b><span>{l} · {layerInfo[l].name}</span></div>
+    ))}
+    <div class="stat" style="--layer: var(--ok)"><b>{count('verified')}</b><span>verified in TD</span></div>
+  </div>
+
+  <NetworkDiagram
+    chains={[
+      ['MediaPipe COMP — pose', 'Select CHOP — wrist', 'EW Kinematics', 'Trail CHOP — 2 s', 'EW Spectral Arc Length'],
+      ['MediaPipe COMP — pose', 'Select CHOP — 33 joints', 'EW Kinetic Energy', 'EW Rarity'],
+      ['EW Kinematics', 'EW Scalar Peak Detector', 'EW Binary Pulses Regularity'],
+    ]}
+    caption="From a pose to qualities of movement: a typical EyesWeb TD network"
+  />
+
+  <div class="filters" id="filters">
+    <button aria-pressed="true" data-f="all">All</button>
+    {layerOrder.map((l) => <button class={l} aria-pressed="false" data-f={l}>{l}</button>)}
+    <button aria-pressed="false" data-f="to-check" style="--layer: var(--warm)">to check</button>
+    <input type="search" id="q" placeholder="Filter by name or purpose…" />
+  </div>
+  <div class="filters tagfilters" id="tagfilters" aria-label="Analysis tags">
+    <span class="muted">analysis</span>
+    {tagOrder.map((t) => <button class="tagbtn" aria-pressed="false" data-t={t} title={tagInfo[t].desc}>{tagInfo[t].name}</button>)}
+  </div>
+
+  {layerOrder.map((l) => (
+    <section class={`layer-block ${l}`} data-layer={l}>
+      <div class="layer-head"><span class="tag">{l}</span><h2>{layerInfo[l].name}</h2></div>
+      <p class="muted">{layerInfo[l].desc}</p>
+      <div class="grid">
+        {byLayer(l).map((op) => (
+          <a class={`card ${op.layer}`} href={`${base}operators/${op.slug}`} data-text={`${op.title} ${op.tagline}`.toLowerCase()} data-state={op.state} data-tags={(op.tags ?? []).join(' ')}>
+            <div class="top"><span>{op.opType}</span><span class={`dot ${op.state ?? ''}`} title={op.state}></span></div>
+            <h3>{op.title}</h3>
+            <p>{op.tagline}</p>
+            <div class="foot">
+              {(op.tags ?? []).map((t) => <span class="atag">{tagInfo[t].name}</span>)}
+              <span>{kindInfo[op.kind].name}</span>
+              {op.inputs.some((p) => p.family === 'TOP') && <span>Top par</span>}
+              <span>{op.output.channels.length} out</span>
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
+  ))}
+
+  <p class="muted" style="margin-top:3rem;font-size:.88rem">
+    <span class="dot verified" style="display:inline-block"></span> verified in TouchDesigner ·
+    <span class="dot to-check" style="display:inline-block"></span> to check ·
+    <span class="dot watch" style="display:inline-block"></span> under review for the first release
+  </p>
+
+  <script is:inline>
+    (function () {
+      var f = 'all', q = '', tag = '';
+      var buttons = document.querySelectorAll('#filters button');
+      var tagButtons = document.querySelectorAll('#tagfilters button');
+      function apply() {
+        document.querySelectorAll('.layer-block').forEach(function (sec) {
+          var visible = 0;
+          sec.querySelectorAll('.card').forEach(function (c) {
+            var ok = (f === 'all' || f === sec.dataset.layer || (f === 'to-check' && c.dataset.state !== 'verified')) && (!q || c.dataset.text.indexOf(q) >= 0) && (!tag || (' ' + c.dataset.tags + ' ').indexOf(' ' + tag + ' ') >= 0);
+            c.style.display = ok ? '' : 'none';
+            if (ok) visible++;
+          });
+          sec.style.display = visible ? '' : 'none';
+        });
+      }
+      buttons.forEach(function (b) {
+        b.addEventListener('click', function () {
+          f = b.dataset.f;
+          buttons.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+          apply();
+        });
+      });
+      tagButtons.forEach(function (b) {
+        b.addEventListener('click', function () {
+          tag = tag === b.dataset.t ? '' : b.dataset.t;
+          tagButtons.forEach(function (x) { x.setAttribute('aria-pressed', x.dataset.t === tag ? 'true' : 'false'); });
+          apply();
+        });
+      });
+      document.getElementById('q').addEventListener('input', function (e) { q = e.target.value.trim().toLowerCase(); apply(); });
+    })();
+  </script>
+</Base>

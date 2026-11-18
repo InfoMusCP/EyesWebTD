@@ -19,6 +19,10 @@ LAYER_PREFIX = {"physical_signals": "L1", "low_level": "L2", "mid_level": "L3", 
 NOT_OPERATORS = {"MassSpringModel"}  # the model data type that the GenericModel features take
 # operators of PyEyesWeb utility classes that the catalog does not list
 NOT_IN_CATALOG = {("physical_signals", "TimeWindowSynchronizer")}
+# features of the first release with no TouchDesigner operator (chops/_held_back): they stay in PyEyesWeb
+NOT_IN_TOUCHDESIGNER = {("physical_signals", "Videogram"), ("low_level", "ContourCurvature"), ("low_level", "BodyPartsFromCurvature"),
+                        ("analysis_primitives", "RecurrencePlot"), ("analysis_primitives", "CrossRecurrencePlot"),
+                        ("analysis_primitives", "PartialRecurrenceSynchronization")}
 
 
 @pytest.fixture(scope="module")
@@ -95,4 +99,4 @@ def test_matches_the_pyeyesweb_catalog(dlls):
     expected = {(f.layer.package.rsplit(".", 1)[-1], f.name) for f in features if f.name not in NOT_OPERATORS}
     built = {(d.parent.name, feature_name(d)) for d in dlls}
     assert built - expected - NOT_IN_CATALOG == set(), "operators without a PyEyesWeb feature in that layer"
-    assert expected - built == set(), "PyEyesWeb features without an operator"
+    assert expected - built - NOT_IN_TOUCHDESIGNER == set(), "PyEyesWeb features without an operator"

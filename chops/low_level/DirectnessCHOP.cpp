@@ -19,7 +19,7 @@ public:
         const InputView input = chopInput(in);
         require(input.channels() >= 2, "Directness requires at least 2 channels (x, y [, z])");
         requireFinite(input);
-        if (input.samples() < 2) return warmingUp(input.samples(), 2);
+        if (input.samples() < 2) return windowTooShort(input.samples(), 2);
         out->channels[0][0] = static_cast<float>(directness_.process(readTrajectory(input)));
     }
 

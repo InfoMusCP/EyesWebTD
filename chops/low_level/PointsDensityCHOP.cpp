@@ -38,7 +38,7 @@ public:
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
         if (!checkSlice(out, in)) return;
-        const InputView input = chopInput(in);
+        const InputView input = sampleInput(in);
         const int points = jointCount(input, 3);
 
         PointsDensity::Params p;

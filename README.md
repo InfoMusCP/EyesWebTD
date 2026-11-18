@@ -69,32 +69,31 @@ PyEyesWeb:
 
 - Kinematics: `input_mode` (the operator takes a point trajectory, not a whole time series) and `output_type` (one toggle
   for each output instead, with the same names);
-- Rarity: `number_of_inputs` is not a parameter: it is the number of input channels.
+- Rarity: `number_of_inputs` is not a parameter: it is the number of input channels. Memory and Pattern are in seconds (PyEyesWeb: samples).
 
 Exposed since the review of the library: Symmetry's ratio method (`Method`, `Indextype`, `Components`, `Aggregation`,
-`Normalizeskeleton`), DirectionChange's metrics (the `Cosine` and `Polygon` toggles), Rarity's `Bins` and RecurrencePlot's
-threshold for each row (`Rowepsilons`).
+`Normalizeskeleton`), DirectionChange's metrics (the `Cosine` and `Polygon` toggles).
 
-## Catalog of Operators (36 CHOPs)
+## Catalog of Operators (30 CHOPs)
 
-The operators of the first release: the 35 features of the PyEyesWeb catalog and `TimeWindowSynchronizer`. The
-operators of the features held back from the release are kept in `chops/_held_back` and are not built.
+The operators of the first release: 29 features of the PyEyesWeb catalog and `TimeWindowSynchronizer`. The
+operators of the features held back from the release are kept in `chops/_held_back` and are not built. So are six operators
+that stay in PyEyesWeb but have no use as TouchDesigner nodes: Videogram, Contour Curvature and Body Parts From Curvature
+(a contour has no practical source in TouchDesigner), Recurrence Plot, Cross Recurrence Plot and Partial Recurrence
+Synchronization (N x N matrices that can only become an image).
 
 ### 1. Physical signals (layer 1)
 | CHOP File | Operator Type | Op Label | Description |
 |---|---|---|---|
 | `HitCellDetectorCHOP.cpp` | `Ewhitcelldetector` | EW L1 Hit Cell Detector | Uniform 2D grid cell quantizer for points |
 | `SilhouetteBodyPartsCHOP.cpp` | `Ewsilhouettebodyparts` | EW L1 Silhouette Body Parts | Bounding regions of head, torso, arms and legs of a silhouette mask (TOP input) |
-| `SilhouetteCentroidsCHOP.cpp` | `Ewsilhouettecentroids` | EW L1 Silhouette Centroids | Centroids of the body parts of a silhouette mask, with optional filtering (TOP input) |
+| `SilhouetteCentroidsCHOP.cpp` | `Ewsilhouettecentroids` | EW L1 Silhouette Centroids | Centroids of the body parts of a silhouette mask in pixels, with optional filtering (the TOP is the `Top` parameter) |
 | `TimeWindowSynchronizerCHOP.cpp` | `Ewtimewindowsynchronizer` | EW L1 Time Window Synchronizer | Re-cuts one or two sampled streams into fixed time windows aligned on a common clock |
-| `VideogramCHOP.cpp` | `Ewvideogram` | EW L1 Videogram | Videogram of a TOP input: one line per frame accumulated over a window |
 
 ### 2. Low-level features (layer 2)
 | CHOP File | Operator Type | Op Label | Description |
 |---|---|---|---|
-| `BodyPartsFromCurvatureCHOP.cpp` | `Ewbodypartsfromcurvature` | EW L2 Body Parts From Curvature | Detects and tracks contour curvature minima and maxima |
 | `BoundingBoxFilledAreaCHOP.cpp` | `Ewboundingboxfilledarea` | EW L2 Bounding Box Filled Area | Ratio of the 3D convex hull area to the bounding box area (contraction index) |
-| `ContourCurvatureCHOP.cpp` | `Ewcontourcurvature` | EW L2 Contour Curvature | Discrete point curvature along closed 2D contour |
 | `CurvatureVelocityCorrelationCHOP.cpp` | `Ewcurvaturevelocitycorrelation` | EW L2 Curvature Velocity Correlation | Savitzky-Golay curvature-velocity (power law) smoothness index |
 | `DirectionChangeCHOP.cpp` | `Ewdirectionchange` | EW L2 Direction Change | Trajectory cosine sharp change and polygon area |
 | `DirectnessCHOP.cpp` | `Ewdirectness` | EW L2 Directness | Path directness index: `\|oldest - newest\| / length` |
@@ -121,18 +120,15 @@ None in the first release: the Gesture Segmenter is held back (`chops/_held_back
 ### Analysis primitives (any layer)
 | CHOP File | Operator Type | Op Label | Description |
 |---|---|---|---|
-| `BinaryPulsesRegularityCHOP.cpp` | `Ewbinarypulsesregularity` | EW AP Binary Pulses Regularity | Whether the intervals between the pulses of a window are equal within a threshold; pulse count and rising-edge trigger |
-| `CrossRecurrencePlotCHOP.cpp` | `Ewcrossrecurrenceplot` | EW AP Cross Recurrence Plot | Cross recurrence matrix between two signals |
+| `BinaryPulsesRegularityCHOP.cpp` | `Ewbinarypulsesregularity` | EW AP Binary Pulses Regularity | Whether the intervals between the pulses of a window are equal within a threshold; pulse count (the onset is the rising edge of `is_regular`: a Logic CHOP) |
 | `EventSynchronizationCHOP.cpp` | `Eweventsynchronization` | EW AP Event Synchronization | Quian Quiroga event synchrony (Q) and delay/leadership (q) |
 | `EventSynchronizationMECSCHOP.cpp` | `Eweventsynchronizationmecs` | EW AP Event Synchronization MECS | Multi Event Class Synchronization across multiple trains |
 | `GeneralisedAutoCorrelationCHOP.cpp` | `Ewgeneralisedautocorrelation` | EW AP Generalised Auto Correlation | Recurrence rate as a function of the lag, or at one lag |
 | `MultiScaleEntropyCHOP.cpp` | `Ewmultiscaleentropy` | EW AP Multi Scale Entropy | Multi-scale sample entropy curve and complexity index per channel |
-| `PartialRecurrenceSynchronizationCHOP.cpp` | `Ewpartialrecurrencesynchronization` | EW AP Partial Recurrence Synchronization | Partial recurrence synchronization matrix from the inverse CPR matrix |
 | `PeriodicityCHOP.cpp` | `Ewperiodicity` | EW AP Periodicity | Sethares periodicity transform (Small2Large / M-Best) |
 | `PhaseLockingValueCHOP.cpp` | `Ewphaselockingvalue` | EW AP Phase Locking Value | Hilbert analytic signal phase synchrony with optional bandpass |
-| `RarityCHOP.cpp` | `Ewrarity` | EW AP Rarity | Information rarity or histogram mode-distance rarity |
-| `RecurrencePlotCHOP.cpp` | `Ewrecurrenceplot` | EW AP Recurrence Plot | Binary recurrence / cross-recurrence distance matrix |
-| `SampleEntropyCHOP.cpp` | `Ewsampleentropy` | EW AP Sample Entropy | Chebyshev distance template-matching sample entropy |
+| `RarityCHOP.cpp` | `Ewrarity` | EW AP Rarity | How unusual the movement of the last moments is compared with the recent past (novelty of patterns; any signal; one value per cook) |
+| `SampleEntropyCHOP.cpp` | `Ewsampleentropy` | EW AP Sample Entropy | Chebyshev distance template-matching sample entropy, one value SampEn(m, r) |
 | `ScalarPeakDetectorCHOP.cpp` | `Ewscalarpeakdetector` | EW AP Scalar Peak Detector | Windowed threshold peak detector |
 
 ## Building, testing, packaging

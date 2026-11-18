@@ -1,23 +1,22 @@
 // TouchDesigner Silhouette Centroids CHOP - wraps ew::imaging::CentroidsCalc (PyEyesWeb SilhouetteCentroids).
 // Hierarchical centroids of a human silhouette: centre of gravity, head, shoulders, elbows, forearms, hands, knees, feet.
 //
-// Input: a TOP holding the silhouette (any non-zero pixel is body, see Threshold). The TOP is the wired input 0 when it
-//   is a TOP, otherwise the TOP named by the Top parameter. The image is read as TouchDesigner gives it (one 8-bit channel,
+// Input: a TOP holding the silhouette, named by the Top parameter (a TOP cannot be wired into a CHOP). It is a binary mask,
+//   thresholded by the user before the operator (a Threshold TOP); the pixels are used as they are. The image is read as TouchDesigner gives it (one 8-bit channel,
 //   first row on top), so rows run from the TOP of the image downwards as in PyEyesWeb: x to the right, y downward, in
 //   pixels of the frame. A colour TOP is read through its red channel: feed it a grayscale mask.
-// Output: one sample, 56 channels (the PyEyesWeb flat names, labels in the order of PyEyesWeb):
-//   centroids_<label>_x, centroids_<label>_y     pixel coordinates in the frame (whole pixels)
-//   normalized_<label>_x, normalized_<label>_y   the same divided by the frame width and height, in [0, 1], y = 0 at the top
+// Output: one sample, 28 channels (the PyEyesWeb flat names, labels in the order of PyEyesWeb):
+//   centroids_<label>_x, centroids_<label>_y     pixel coordinates in the frame (whole pixels), y = 0 at the top
+//   Normalising (divide by the width and height of the TOP) is left to the user, after the operator.
 //   <label> = center_of_gravity, head, left_shoulder, left_elbow, left_forearm, left_hand, right_shoulder, right_elbow,
 //   right_forearm, right_hand, left_knee, left_foot, right_knee, right_foot. "Left" is the smaller x of the image.
 //   A centroid that was not requested or cannot be found is NaN, as in PyEyesWeb.
 // Parameters: Silhouette (full, upper, lower, left, right; structural), Filtercentroids, Alpha, Addintermediate, one toggle
-//   per centroid (Centerofgravity, Head, Leftshoulder, ...; PyEyesWeb `parts`), Threshold (see below), Reset.
+//   per centroid (Centerofgravity, Head, Leftshoulder, ...; PyEyesWeb `parts`), Reset.
 // Kind: buffer with state: the alpha filter of each centroid lives across the cooks (one frame per cook); Reset forgets it.
 // Statuses: a mask without foreground is INVALID_INPUT ("no foreground pixels in the silhouette"), the outputs stay zero;
 //   no TOP, or a TOP that cannot be read, is INVALID_INPUT too. Otherwise OK (no warm-up).
-// Difference from PyEyesWeb: Threshold (default 0) makes the foreground the pixels above it, in the 0-1 range of the TOP;
-//   at 0 it is "non-zero", as PyEyesWeb. The images of TouchDesigner are floating point or 8-bit, PyEyesWeb takes 8-bit.
+// Difference from PyEyesWeb: the images of TouchDesigner are floating point or 8-bit, PyEyesWeb takes 8-bit.
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -50,7 +49,7 @@ public:
     Schema schema(const OP_Inputs*) const override {
         std::vector<std::string> labels;
         for (int slot = 0; slot < CentroidsCalc::kCentroidCount; ++slot) labels.push_back(channelLabel(slot));
-        return {Output::grid("centroids", labels, {"x", "y"}), Output::grid("normalized", labels, {"x", "y"})};
+        return {Output::grid("centroids", labels, {"x", "y"})};
     }
 
     bool needsInput() const override { return false; }
@@ -66,7 +65,6 @@ public:
 
     void declareParameters(Params& p) override {
         p.page("Silhouette");
-        p.number("Threshold", "Threshold", 0.0, Range::between(0, 1));
         p.menu("Silhouette", "Silhouette", "full",
                {{"full", "Full body"}, {"upper", "Upper half"}, {"lower", "Lower half"}, {"left", "Left half"}, {"right", "Right half"}});
         p.toggle("Filtercentroids", "Filter Centroids", false);
@@ -77,7 +75,7 @@ public:
     }
 
     void process(CHOP_Output* out, const OP_Inputs* in) override {
-        const TopMask mask(in, in->getParDouble("Threshold"));
+        const TopMask mask(in);
         const ew::Blob2D blob = ew::blobFromMask(mask.view());
 
         CentroidsCalc::Params params;
@@ -116,8 +114,6 @@ public:
             const bool present = result.present[slot];
             out->channels[2 * slot][0] = present ? static_cast<float>(result.pixel[slot].x) : nan;
             out->channels[2 * slot + 1][0] = present ? static_cast<float>(result.pixel[slot].y) : nan;
-            out->channels[2 * count + 2 * slot][0] = present ? static_cast<float>(result.normalized[slot].x) : nan;
-            out->channels[2 * count + 2 * slot + 1][0] = present ? static_cast<float>(result.normalized[slot].y) : nan;
         }
     }
 
@@ -140,4 +136,4 @@ private:
 
 constexpr SilhouetteCentroidsCHOP::Part SilhouetteCentroidsCHOP::kParts[];
 
-EW_TD_CHOP(SilhouetteCentroidsCHOP, "Ewsilhouettecentroids", "EW L1 Silhouette Centroids", 0, 1)
+EW_TD_CHOP(SilhouetteCentroidsCHOP, "Ewsilhouettecentroids", "EW L1 Silhouette Centroids", 0, 0)

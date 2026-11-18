@@ -78,7 +78,7 @@ public:
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {
         if (!checkSlice(out, in)) return;
-        const InputView input = chopInput(in);
+        const InputView input = sampleInput(in);
         requireFinite(input);
         int dims = in->getParInt("Dims");
         if (dims < 1) dims = 1;
