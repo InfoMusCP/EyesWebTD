@@ -39,6 +39,9 @@ if(NOT TARGET ew_core)
   if(MSVC)
     target_compile_options(ew_core PRIVATE /W4)
     target_compile_definitions(ew_core PUBLIC _USE_MATH_DEFINES)
+  else()
+    # As in EyesWebCore: no fused multiply-add contraction, so the operators give the same numbers on macOS as on Windows.
+    target_compile_options(ew_core PRIVATE -ffp-contract=off)
   endif()
 endif()
 # One folder per layer of the PyEyesWeb model under chops/, one DLL per operator (TouchDesigner loads one operator
