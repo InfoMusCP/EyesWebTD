@@ -4,6 +4,12 @@ cmake_minimum_required(VERSION 3.20)
 # operators saved in a .toe with the installed ones: a MAJOR change is for changes that break saved projects (a renamed
 # parameter or channel), MINOR for new operators or parameters, PATCH for fixes.
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" EW_TD_VERSION_TEXT LIMIT_COUNT 1)
+
+# macOS: one universal bundle per operator (Apple silicon and Intel). Must be set before project() to apply everywhere, so
+# it is also accepted from the command line.
+set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures of the operators")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Oldest macOS the operators run on")
+
 project(EyesWebTD_CHOP VERSION ${EW_TD_VERSION_TEXT} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -45,7 +51,20 @@ foreach(LAYER IN LISTS EW_LAYERS)
   foreach(SRC IN LISTS LAYER_SOURCES)
     get_filename_component(NAME_WE ${SRC} NAME_WE)
     set(TARGET_NAME "Ew_${NAME_WE}")
-    add_library(${TARGET_NAME} SHARED ${SRC})
+    if(APPLE)
+      # TouchDesigner on macOS loads a custom operator as a .plugin bundle.
+      add_library(${TARGET_NAME} MODULE ${SRC})
+      set_target_properties(${TARGET_NAME} PROPERTIES
+        BUNDLE TRUE
+        BUNDLE_EXTENSION plugin
+        MACOSX_BUNDLE_GUI_IDENTIFIER "org.infomus.eyesweb.${NAME_WE}"
+        MACOSX_BUNDLE_BUNDLE_NAME "${TARGET_NAME}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Info.plist.in")
+    else()
+      add_library(${TARGET_NAME} SHARED ${SRC})
+    endif()
     target_link_libraries(${TARGET_NAME} PRIVATE ew_core)
     target_include_directories(${TARGET_NAME} PRIVATE ${TD_CHOP_SDK} "${CMAKE_CURRENT_SOURCE_DIR}/common" "${EW_TD_GENERATED}")
     if(WIN32)
@@ -55,13 +74,14 @@ foreach(LAYER IN LISTS EW_LAYERS)
       target_sources(${TARGET_NAME} PRIVATE "${EW_TD_GENERATED}/rc/${TARGET_NAME}.rc")
     endif()
     # TouchDesigner does not load DLLs from subfolders of Plugins: the package is flat (the build tree keeps the layer folders).
-    install(TARGETS ${TARGET_NAME} RUNTIME DESTINATION Plugins)
+    install(TARGETS ${TARGET_NAME} RUNTIME DESTINATION Plugins LIBRARY DESTINATION Plugins BUNDLE DESTINATION Plugins)
     string(REGEX REPLACE "CHOP$" "" OP_FEATURE "${NAME_WE}")
     string(TOLOWER "${OP_FEATURE}" NAME_LOWER)
     list(APPEND EW_TD_OPERATOR_LIST "${LAYER} Ew${NAME_LOWER}")
     # The generator expression keeps Visual Studio from adding a per-configuration subfolder.
     set_target_properties(${TARGET_NAME} PROPERTIES
-      RUNTIME_OUTPUT_DIRECTORY "$<1:${CMAKE_BINARY_DIR}/Plugins/EyesWeb/${LAYER}>")
+      RUNTIME_OUTPUT_DIRECTORY "$<1:${CMAKE_BINARY_DIR}/Plugins/EyesWeb/${LAYER}>"
+      LIBRARY_OUTPUT_DIRECTORY "$<1:${CMAKE_BINARY_DIR}/Plugins/EyesWeb/${LAYER}>")
     if(MSVC)
       target_compile_definitions(${TARGET_NAME} PRIVATE _USE_MATH_DEFINES)
     endif()
@@ -92,7 +112,11 @@ list(JOIN EW_TD_OPERATOR_LIST "
 file(WRITE "${EW_TD_GENERATED}/operators.txt" "${EW_TD_OPERATOR_LINES}
 ")
 install(FILES "${EW_TD_GENERATED}/operators.txt" DESTINATION palette)
-install(FILES README.md CHANGELOG.md THIRD_PARTY_NOTICES.md VERSION DESTINATION .)
+install(FILES README.md CHANGELOG.md THIRD_PARTY_NOTICES.md VERSION LICENSE NOTICE DESTINATION .)
+# The operators contain the core: its binary licence goes with them.
+if(DEFINED EW_CORE_DIR)
+  install(FILES "${EW_CORE_DIR}/LICENSE" DESTINATION . RENAME LICENSE-EyesWebCore)
+endif()
 install(DIRECTORY palette/ DESTINATION palette FILES_MATCHING PATTERN "*.py" PATTERN "*.md" PATTERN "*.tox")
 configure_file(cmake/PACKAGE_INFO.txt.in "${EW_TD_GENERATED}/PACKAGE_INFO.txt" @ONLY)
 install(FILES "${EW_TD_GENERATED}/PACKAGE_INFO.txt" DESTINATION .)
@@ -101,6 +125,10 @@ set(CPACK_PACKAGE_NAME "EyesWebTD")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_VENDOR "InfoMus Lab")
 set(CPACK_GENERATOR ZIP)
-set(CPACK_PACKAGE_FILE_NAME "EyesWebTD-${PROJECT_VERSION}-win64")
+if(APPLE)
+  set(CPACK_PACKAGE_FILE_NAME "EyesWebTD-${PROJECT_VERSION}-macos-universal")
+else()
+  set(CPACK_PACKAGE_FILE_NAME "EyesWebTD-${PROJECT_VERSION}-win64")
+endif()
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
 include(CPack)

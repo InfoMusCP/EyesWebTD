@@ -1,24 +1,33 @@
 name: CI
 
-# Builds all the operators in Release, runs the base-layer tests, the mock-host tests, the package checks and the parity
-# tests against PyEyesWeb, and uploads the package. The workspace has the layout of the lab machines:
+# Builds all the operators in Release on Windows and macOS and uploads one package per system.
+#   Windows: base-layer tests, mock-host tests, package checks and parity tests against PyEyesWeb.
+#   macOS:   base-layer tests and a check of every bundle (both architectures, the three TouchDesigner entry points); the
+#            mock host loads DLLs and runs on Windows only.
+# A tag v<VERSION> also creates a GitHub pre-release with both packages.
+# The workspace has the layout of the lab machines:
 #   work/EyesWebTD   this repository
-#   work/EyesWebCore the C++ core (also builds the Python module that PyEyesWeb needs)
+#   work/EyesWebCore the C++ core (on Windows it also builds the Python module that PyEyesWeb needs)
 #   work/PyEyesWeb   the Python package (parity tests)
-# EyesWebCore and PyEyesWeb are checked out with the secret CHECKOUT_TOKEN (a token that can read them).
+# EyesWebCore is private: it and PyEyesWeb are checked out with the secret CHECKOUT_TOKEN (a token that can read them), at
+# the branch in CORE_REF / PYEYESWEB_REF.
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
+env:
+  CORE_REF: dev
+  PYEYESWEB_REF: dev
+
 permissions:
-  contents: write   # the release step attaches the package to the release of a tag
+  contents: write   # the release job creates the release of a tag
 
 jobs:
-  build-test:
+  windows:
     runs-on: windows-2022
     timeout-minutes: 60
     steps:
@@ -28,11 +37,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: InfoMusCP/EyesWebCore
+          ref: ${{ env.CORE_REF }}
           token: ${{ secrets.CHECKOUT_TOKEN }}
           path: work/EyesWebCore
       - uses: actions/checkout@v4
         with:
           repository: InfoMusCP/PyEyesWeb
+          ref: ${{ env.PYEYESWEB_REF }}
           token: ${{ secrets.CHECKOUT_TOKEN }}
           path: work/PyEyesWeb
       - uses: actions/setup-python@v5
@@ -77,13 +88,70 @@ jobs:
           cpack -C Release
       - uses: actions/upload-artifact@v4
         with:
-          name: EyesWebTD-package
+          name: EyesWebTD-win64
           path: work/build/EyesWebTD-*-win64.zip
 
-      - name: Attach the package to the release
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: work/EyesWebTD
+      - uses: actions/checkout@v4
+        with:
+          repository: InfoMusCP/EyesWebCore
+          ref: ${{ env.CORE_REF }}
+          token: ${{ secrets.CHECKOUT_TOKEN }}
+          path: work/EyesWebCore
+
+      - name: Build the operators (universal arm64 + x86_64)
+        run: |
+          cd work
+          cmake -S EyesWebTD -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel
+
+      - name: Base-layer tests
+        run: ./work/build/ew_td_tests
+
+      - name: Check the bundles
+        run: |
+          cd work/build/Plugins/EyesWeb
+          n=0
+          for b in */*.plugin; do
+            exe="$b/Contents/MacOS/$(basename "$b" .plugin)"
+            archs="$(lipo -archs "$exe")"
+            case "$archs" in *arm64*x86_64*|*x86_64*arm64*) ;; *) echo "$b: architectures '$archs'"; exit 1 ;; esac
+            for sym in FillCHOPPluginInfo CreateCHOPInstance DestroyCHOPInstance; do
+              nm -gU -arch arm64 "$exe" | grep -q " _$sym\$" || { echo "$b: $sym not exported"; exit 1; }
+            done
+            n=$((n+1))
+          done
+          echo "$n bundles checked"
+          [ "$n" -eq "$(ls ../../../EyesWebTD/chops/*/*.cpp | grep -v _held_back | wc -l | tr -d ' ')" ]
+
+      - name: Package
+        run: |
+          cd work/build
+          cpack -C Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EyesWebTD-macos
+          path: work/build/EyesWebTD-*-macos-universal.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the pre-release with both packages
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" work/build/EyesWebTD-*-win64.zip --repo "${GITHUB_REPOSITORY}" --title "EyesWebTD ${GITHUB_REF_NAME}" --notes-file work/EyesWebTD/CHANGELOG.md
+          gh release create "${GITHUB_REF_NAME}" dist/*.zip --repo "${GITHUB_REPOSITORY}" --target "${GITHUB_SHA}" \
+            --title "EyesWebTD ${GITHUB_REF_NAME} (alpha)" --prerelease --notes-file CHANGELOG.md

@@ -4,6 +4,35 @@ Native C++ Custom Channel Operator (CHOP) plugins for TouchDesigner, wrapping th
 The operators are grouped by the layers of the conceptual model that PyEyesWeb follows (`PyEyesWeb/docs/theory/framework.md`),
 not by the EyesWeb block library.
 
+> **Alpha.** This is the first release of the native operators (0.1.0). Names, parameters and channels may still change.
+> The earlier `.tox` components (pyeyesweb 1.x) are on the `main` branch of this repository.
+
+## Install
+
+1. Download the package for your system from the
+   [releases](https://github.com/InfoMusCP/EyesWebTD/releases) page: `EyesWebTD-<version>-win64.zip` (Windows, 64-bit)
+   or `EyesWebTD-<version>-macos-universal.zip` (macOS 11 or later, Apple silicon and Intel).
+2. Unzip it and copy the content of its `Plugins` folder (`.dll` files on Windows, `.plugin` bundles on macOS) into one
+   of the folders where TouchDesigner looks for custom operators:
+   - a folder named `Plugins` next to your `.toe` project (only that project sees them), or
+   - for all projects: `Documents\Derivative\Plugins` on Windows,
+     `~/Library/Application Support/Derivative/TouchDesigner099/Plugins` on macOS (create the folder if it is missing).
+3. **macOS only:** the bundles are not signed by Apple, so macOS blocks them after a download. Before starting
+   TouchDesigner, run once in Terminal, with the folder where you copied them:
+   ```bash
+   xattr -dr com.apple.quarantine ~/Library/Application\ Support/Derivative/TouchDesigner099/Plugins
+   ```
+4. Start TouchDesigner (2025.32280 or later) and allow the plugins when it asks. The operators are in the OP Create
+   dialog under **Custom**, with labels `EW L1 …` to `EW L4 …` (the layer) and `EW AP …` (analysis primitives). `palette/build_palette.py` builds an
+   EyesWeb palette with all of them (see `palette/README.md`).
+
+Updating: delete the old EyesWeb files from the Plugins folder first (operators removed in a release would stay
+otherwise), then copy the new ones.
+
+Licence: the source code is under the Apache License 2.0 (`LICENSE`); the compiled operators also contain EyesWebCore,
+under the InfoMus Binary Licence (`LICENSE-EyesWebCore` in the package). Free to use, including commercially; please
+credit **InfoMus Lab - Casa Paganini, University of Genoa** (see `NOTICE`).
+
 ## Layout
 
 ```
@@ -23,7 +52,7 @@ Layers: `physical_signals`, `low_level`, `mid_level`, `high_level`, `analysis_pr
 
 An operator derives from `ew_td::EwChop` and declares its outputs, its parameters and its computation; the base class
 does the TouchDesigner contract (channel names from the schema, zeroed outputs, exceptions turned into a status and a
-warning). See `chops/low_level/DirectnessCHOP.cpp` (a window to one value) and `MotionNoiseDetectorCHOP.cpp` (a
+warning). See `chops/low_level/DirectnessCHOP.cpp` (a window to one value) and `KinematicsCHOP.cpp` (a
 stream with parameters):
 
 ```cpp
@@ -152,7 +181,7 @@ The parity tests need PyEyesWeb and the compiled core module next to the reposit
 them only the host and package tests run.
 
 Package: `cmake --install build --config Release --prefix <dir>` or `cd build && cpack -C Release` gives
-`EyesWebTD-<version>-win64.zip` with the DLLs flat in `Plugins/` (TouchDesigner does not load subfolders; the build tree keeps
+`EyesWebTD-<version>-win64.zip` (`-macos-universal.zip` on macOS: `cmake -S EyesWebTD -B build -DCMAKE_BUILD_TYPE=Release`) with the operators flat in `Plugins/` (TouchDesigner does not load subfolders; the build tree keeps
 the layer folders), the palette builder, the changelog and the notices
 (`THIRD_PARTY_NOTICES.md`). Copy the DLLs into the `Plugins` folder of the project or into `Documents/Derivative/Plugins`.
 

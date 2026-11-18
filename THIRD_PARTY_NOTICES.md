@@ -4,32 +4,11 @@ The EyesWebTD operators (the DLLs in `Plugins/EyesWeb/`) contain, or are built w
 
 ## EyesWebCore (statically linked into every DLL)
 
-The C++ core with the ports of the EyesWeb blocks, the same code that PyEyesWeb uses. MIT licence (the licence of
-PyEyesWeb, copyright InfoMusCP).
-
-```
-MIT License
-
-Copyright (c) 2025 InfoMusCP
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+The C++ core with the ports of the EyesWeb blocks, the same code that PyEyesWeb uses through the `eyesweb-core` wheel.
+Copyright (c) 2026 InfoMus Lab - Casa Paganini. Distributed in binary form only, under the InfoMus Binary Licence
+(`LICENSE-EyesWebCore` in the release package): use, including commercial use, and redistribution of the unmodified
+binaries are free, with the licence and these notices kept and the credit "InfoMus Lab - Casa Paganini, University of
+Genoa" given. The source code of EyesWebTD itself is under the Apache License 2.0 (`LICENSE`, `NOTICE`).
 
 ## pocketfft (header only, compiled into the DLLs through EyesWebCore)
 

@@ -1,0 +1,17 @@
+EyesWebTD
+Copyright 2026 InfoMus Lab - Casa Paganini, University of Genoa
+
+This product includes software developed at InfoMus Lab - Casa Paganini, University of Genoa
+(https://github.com/InfoMusCP).
+
+Credit: any product, performance, installation, publication or presentation that uses EyesWebTD must credit
+"InfoMus Lab - Casa Paganini, University of Genoa". Publications that report results obtained with it should cite:
+
+  Sabharwal, S. R., Corbellini, N., Ghisio, S., Coletta, P., Romano, G., Foysal, A. A., Volpe, G., Camurri, A.
+  "PyEyesWeb: An open source toolkit for multimodal movement feature extraction". MOCO '26: Proceedings of the
+  10th International Conference on Movement and Computing, Montpellier, France, 23-25 April 2026. ACM.
+  DOI: 10.1145/3802842.3802904
+
+The source code of EyesWebTD is licensed under the Apache License, Version 2.0 (the file LICENSE). The compiled
+operators in a release package also contain EyesWebCore, which is distributed under the InfoMus Binary Licence (the
+file LICENSE-EyesWebCore in the package); see THIRD_PARTY_NOTICES.md.
