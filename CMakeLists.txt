@@ -97,12 +97,14 @@ add_test(NAME ew_td_tests COMMAND ew_td_tests)
 # Mock TouchDesigner host (tests/host): loads an operator DLL with LoadLibrary and cooks it like TouchDesigner does, for
 # the Python tests in tests/host (ewhost.py). It does not link the operators. The fixture is a CHOP that exists only to
 # test the host. Both are built in the default output folder of the generator (<build>/Release/).
-add_library(ew_td_host SHARED tests/host/ew_td_host.cpp)
-target_include_directories(ew_td_host PRIVATE ${TD_CHOP_SDK} "${CMAKE_CURRENT_SOURCE_DIR}/tests/host")
-add_library(ew_td_fixture SHARED tests/host/fixture/ew_fixture_chop.cpp)
-target_include_directories(ew_td_fixture PRIVATE ${TD_CHOP_SDK})
-add_library(ew_td_fixture_top SHARED tests/host/fixture/ew_fixture_top_chop.cpp)
-target_include_directories(ew_td_fixture_top PRIVATE ${TD_CHOP_SDK})
+if(WIN32)   # the mock host loads the operators with LoadLibrary
+  add_library(ew_td_host SHARED tests/host/ew_td_host.cpp)
+  target_include_directories(ew_td_host PRIVATE ${TD_CHOP_SDK} "${CMAKE_CURRENT_SOURCE_DIR}/tests/host")
+  add_library(ew_td_fixture SHARED tests/host/fixture/ew_fixture_chop.cpp)
+  target_include_directories(ew_td_fixture PRIVATE ${TD_CHOP_SDK})
+  add_library(ew_td_fixture_top SHARED tests/host/fixture/ew_fixture_top_chop.cpp)
+  target_include_directories(ew_td_fixture_top PRIVATE ${TD_CHOP_SDK})
+endif()
 
 # ---- Package (cmake --install <build> --config Release --prefix <dir>, or cpack -C Release) -----------------------------
 # <prefix>/Plugins/Ew_<Feature>CHOP.dll (flat), the palette builder with the list of operators per layer, the notices and the

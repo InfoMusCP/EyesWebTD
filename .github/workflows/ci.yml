@@ -109,7 +109,7 @@ jobs:
         run: |
           cd work
           cmake -S EyesWebTD -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release --parallel
+          cmake --build build --config Release --parallel -- -k   # -k: report every failing operator, not only the first
 
       - name: Base-layer tests
         run: ./work/build/ew_td_tests
