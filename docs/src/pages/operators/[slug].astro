@@ -30,7 +30,6 @@ if (op.kind === 'sample' || op.kind === 'stream')
 if (op.kind === 'stream' || op.kind === 'buffer')
   common.push({ name: 'Reset', label: 'Reset', default: 'pulse', desc: 'Forget the state at the next cook.' });
 
-const stateLabel: Record<string, string> = { verified: 'Verified in TD', 'to-check': 'To check in TD', watch: 'Under review' };
 const related = (op.related ?? []).map((s) => bySlug(s)).filter(Boolean) as Operator[];
 let n = 0;
 const num = () => String(++n).padStart(2, '0');
@@ -47,7 +46,6 @@ const num = () => String(++n).padStart(2, '0');
         <span class="chip">type <b>{op.opType}</b></span>
         <span class="chip">cook <b>{kindInfo[op.kind].name}</b></span>
         <span class="chip">inputs <b>{op.inputs.filter((p) => !p.optional || p.port.startsWith('Input 1')).length}</b></span>
-        {op.state && <span class="chip"><span class={`dot ${op.state}`}></span>{stateLabel[op.state]}</span>}
       </div>
     </header>
 
@@ -146,22 +144,13 @@ const num = () => String(++n).padStart(2, '0');
       </>
     )}
 
-    <h2><span class="num">{num()}</span>Test checklist</h2>
-    <p class="muted" style="font-size:.92rem">Ticks and notes are saved in this browser only. <span class="progress" data-progress></span></p>
-    <div class="checks" data-op={op.slug}>
-      {op.checks.map((c, k) => (
-        <label><input type="checkbox" data-key={`${op.slug}:${k}`} /><span set:html={c} /></label>
-      ))}
-    </div>
-    <textarea class="notes" data-note={op.slug} placeholder="Your test notes: what worked, what to change, keep / remove for the release…"></textarea>
-
     {related.length > 0 && (
       <>
         <h2><span class="num">{num()}</span>Related</h2>
         <div class="grid">
           {related.map((r) => (
             <a class={`card ${r.layer}`} href={`${base}operators/${r.slug}`}>
-              <div class="top"><span>{r.layer}</span><span class={`dot ${r.state ?? ''}`}></span></div>
+              <div class="top"><span>{r.layer}</span></div>
               <h3>{r.title}</h3>
               <p>{r.tagline}</p>
             </a>
@@ -176,26 +165,4 @@ const num = () => String(++n).padStart(2, '0');
     </nav>
   </div>
 
-  <script is:inline>
-    (function () {
-      function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-      function set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
-      var boxes = document.querySelectorAll('.checks input[data-key]');
-      var prog = document.querySelector('[data-progress]');
-      function update() {
-        var done = 0; boxes.forEach(function (b) { if (b.checked) done++; });
-        if (prog) prog.textContent = done + ' / ' + boxes.length + ' checked';
-      }
-      boxes.forEach(function (b) {
-        b.checked = get('ewtd:' + b.dataset.key) === '1';
-        b.addEventListener('change', function () { set('ewtd:' + b.dataset.key, b.checked ? '1' : '0'); update(); });
-      });
-      update();
-      var note = document.querySelector('textarea[data-note]');
-      if (note) {
-        note.value = get('ewtd:note:' + note.dataset.note) || '';
-        note.addEventListener('input', function () { set('ewtd:note:' + note.dataset.note, note.value); });
-      }
-    })();
-  </script>
 </Base>

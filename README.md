@@ -7,6 +7,8 @@ not by the EyesWeb block library.
 > **Alpha.** This is the first release of the native operators (0.1.0). Names, parameters and channels may still change.
 > The earlier `.tox` components (pyeyesweb 1.x) are on the `main` branch of this repository.
 
+**Documentation:** https://infomuscp.github.io/EyesWebTD/ (every operator: input, output, parameters, an example network).
+
 ## Install
 
 1. Download the package for your system from the

@@ -8,7 +8,6 @@ export const l4: Operator[] = [
     label: 'EW L4 Ensemble Dominance',
     layer: 'L4',
     kind: 'frame',
-    state: 'to-check',
     tagline: 'Who leads the group? The member with the least complex movement.',
     about: `In an ensemble, the participant whose movement is most regular and predictable acts as the anchor the others react to. Given the complexity index of each participant (from <a href="multi-scale-entropy">Multi Scale Entropy</a>), this operator scores each one and names the leader: the lowest complexity.`,
     formula: 'Dᵢ = 1 − CIᵢ / maxⱼ CIⱼ · leader = argminᵢ CIᵢ',
@@ -34,7 +33,6 @@ export const l4: Operator[] = [
       'Trail a long window (10 s or more) and feed <b>EW AP Multi Scale Entropy</b>.',
       'Select the <code>complexity*</code> channels and wire into <b>EW L4 Ensemble Dominance</b>.',
     ],
-    checks: ['A participant moving in a steady loop should become the leader against two improvising.', 'A constant (NaN) participant is never the leader.'],
     related: ['multi-scale-entropy'],
   },
 ];
@@ -47,7 +45,6 @@ export const ap: Operator[] = [
     label: 'EW AP Binary Pulses Regularity',
     layer: 'AP',
     kind: 'frame',
-    state: 'verified',
     tagline: 'Are the beats in the window evenly spaced? A rhythm detector.',
     about: `A pulse is a non-zero sample (a step, a beat, the <code>is_peak</code> of <a href="scalar-peak-detector">Scalar Peak Detector</a>). Over a window, the operator measures the intervals between pulses: the window is regular when it holds at least three pulses and the spread of the intervals is below Threshold. To fire an event at the moment the rhythm <em>becomes</em> regular, take the rising edge of <code>is_regular</code> with a Logic CHOP (<em>Convert Input</em>: Off to On): the operator does not output it.`,
     formula: 'regular ⇔ pulses ≥ 3 and max(I) − min(I) < Threshold',
@@ -75,7 +72,6 @@ export const ap: Operator[] = [
       'Keep a window of the pulses with a Trail CHOP that holds 3 beats or more (e.g. 2–3 s), and wire it into <b>EW AP Binary Pulses Regularity</b>.',
       'Use <code>is_regular</code> as a state ("the rhythm is steady"), or its rising edge with a Logic CHOP (Off to On) to fire an event when a steady rhythm starts.',
     ],
-    checks: ['A Pattern CHOP square wave (fixed period) gives is_regular = 1.', 'Threshold 1 vs 2 with a slightly jittered pulse train.'],
     related: ['scalar-peak-detector', 'periodicity'],
   },
   {
@@ -85,7 +81,6 @@ export const ap: Operator[] = [
     label: 'EW AP Event Synchronization',
     layer: 'AP',
     kind: 'frame',
-    state: 'to-check',
     tagline: 'Do two event trains fire together, and who comes first?',
     about: `Quian Quiroga event synchronization: counts how often an event in train x has a matching event in y within Max Lag, and in which order. <code>synchronization</code> (Q) is 1 when every event is matched; <code>delay</code> (q) is positive when x tends to lead, negative when y leads.`,
     inputs: [
@@ -108,7 +103,6 @@ export const ap: Operator[] = [
     ],
     network: [['EW Scalar Peak Detector — A', 'Merge CHOP', 'Trail CHOP — 5 s', 'EW Event Synchronization'], ['EW Scalar Peak Detector — B', 'Merge CHOP']],
     recipe: ['Detect events on two signals (peaks, footsteps).', 'Merge them (x first) and trail a window.', 'Wire into <b>EW AP Event Synchronization</b>.'],
-    checks: ['Identical trains: Q = 1, q = 0.', 'Delay y by 2 samples: q > 0 (x leads).'],
     related: ['event-synchronization-mecs', 'scalar-peak-detector'],
   },
   {
@@ -118,7 +112,6 @@ export const ap: Operator[] = [
     label: 'EW AP Event Synchronization MECS',
     layer: 'AP',
     kind: 'frame',
-    state: 'to-check',
     tagline: 'Synchronisation of many event trains with several event classes.',
     about: `Multi Event Class Synchronization extends event synchronization to N performers and C kinds of event (e.g. steps, claps, turns). Each class gets a synchronisation score, weighted by a kernel over the lag, and an event count. The input is the window (a Trail CHOP of the events): each window is analysed on its own.`,
     inputs: [
@@ -147,7 +140,6 @@ export const ap: Operator[] = [
     ],
     network: [['Events A CHOP — 2 classes', 'Merge CHOP', 'Trail CHOP — 5 s', 'EW Event Synchronization MECS'], ['Events B CHOP — 2 classes', 'Merge CHOP']],
     recipe: ['Build one binary channel per (performer, class), series-major.', 'Keep a window with a Trail CHOP (a few seconds), set Number of Inputs and Classes to match and wire into <b>EW AP Event Synchronization MECS</b>.'],
-    checks: ['Channel order: all classes of performer 0, then performer 1.', 'The same window always gives the same result: nothing is carried over.'],
     related: ['event-synchronization'],
   },
   {
@@ -157,7 +149,6 @@ export const ap: Operator[] = [
     label: 'EW AP Generalised Auto Correlation',
     layer: 'AP',
     kind: 'frame',
-    state: 'to-check',
     tagline: 'How often the movement returns to a state after τ samples — a nonlinear autocorrelation.',
     about: `Asks a simple question of a window of movement: <b>if I look τ samples later, how often is the body back in (almost) the same state?</b> That share, between 0 and 1, is the recurrence rate RR(τ). The operator computes it for every lag τ = 1 … Max Lag and outputs the whole curve.
 
@@ -192,12 +183,6 @@ How to read the curve: a <b>repetitive</b> movement of period P gives a peak of 
       'Look at the output curve: the highest peak after the initial decay is the period in samples (τ = sample index + 1). Divide by 50 for seconds.',
       'Optional: switch to <em>Scalar</em> with Lag = that period to get one live number of "how repetitive" the movement is.',
     ],
-    checks: [
-      'A Pattern CHOP sine of period 20 samples, window 100, Max Lag 40: peaks at τ = 20 and 40.',
-      'Raise Epsilon until RR ≈ 1 everywhere, lower it until RR ≈ 0: the useful range is in between.',
-      'Hold still: RR high at every lag. Move without repeating: RR decays and stays low.',
-      'Max Lag ≥ window length: INVALID_INPUT.',
-    ],
     related: ['periodicity'],
   },
   {
@@ -207,7 +192,6 @@ How to read the curve: a <b>repetitive</b> movement of period P gives a peak of 
     label: 'EW AP Multi Scale Entropy',
     layer: 'AP',
     kind: 'frame',
-    state: 'to-check',
     tagline: 'Complexity of a signal across time scales.',
     about: `Coarse-grains each channel at scales 1 … Max Scale and computes the sample entropy at each scale. The area under this curve is the <code>complexity</code> index: high for rich, unpredictable movement; low for regular or purely random movement. Feeds <a href="ensemble-dominance">Ensemble Dominance</a>.
 
@@ -235,8 +219,7 @@ The output has <b>one value per scale</b> (the signal averaged over k consecutiv
     ],
     network: [['EW Kinetic Energy', 'Trail CHOP — 10 s', 'EW Multi Scale Entropy', 'EW Ensemble Dominance']],
     recipe: ['Trail a scalar for 10 s or more.', 'Wire into <b>EW AP Multi Scale Entropy</b>.'],
-    checks: ['A sine: low complexity. Noise: low at large scales. Real movement: higher.'],
-    notes: ['Minimum Points default lowered to 30 for live testing.'],
+    notes: ['Minimum Points is 30 by default (500 in PyEyesWeb) so that short live windows give a value; raise it for steadier entropy estimates on longer windows.'],
     related: ['sample-entropy', 'ensemble-dominance'],
   },
   {
@@ -246,7 +229,6 @@ The output has <b>one value per scale</b> (the signal averaged over k consecutiv
     label: 'EW AP Periodicity',
     layer: 'AP',
     kind: 'frame',
-    state: 'to-check',
     tagline: 'Which periods make up a repetitive movement (Sethares transform).',
     about: `The Sethares periodicity transform decomposes a window into periodic components and returns their periods (in samples) and powers. <b>Small to Large</b> scans every period up to half the window and keeps those above Threshold; <b>M-Best</b> keeps the M strongest. Good for finding the tempo of a dance.`,
     inputs: [
@@ -274,7 +256,6 @@ The output has <b>one value per scale</b> (the signal averaged over k consecutiv
     ],
     network: [['EW Kinematics — velocity', 'Trail CHOP — 4 s', 'EW Periodicity — mbest', 'Select CHOP — period0', 'Math CHOP — to BPM']],
     recipe: ['Keep a window of a scalar with a Trail CHOP (2–3 periods or more) and wire it into <b>EW AP Periodicity</b>, M-Best with M = 3.', 'Convert the period to BPM: <code>60 · rate / period</code>.'],
-    checks: ['A sine of period 20: period0 = 20 (or a multiple).'],
     related: ['generalised-auto-correlation', 'binary-pulses-regularity'],
   },
   {
@@ -284,7 +265,6 @@ The output has <b>one value per scale</b> (the signal averaged over k consecutiv
     label: 'EW AP Phase Locking Value',
     layer: 'AP',
     kind: 'frame',
-    state: 'to-check',
     tagline: 'Do two oscillating movements keep a constant phase relation?',
     about: `Extracts the instantaneous phase of two signals (Hilbert transform, optional band-pass) and measures how constant their phase difference is over the window. 1 = phase-locked (moving in unison or in a fixed offset), 0 = unrelated. Ideal for two dancers swaying together.`,
     formula: 'PLV = | (1/N) Σ e^{i(φₓ − φᵧ)} |',
@@ -306,7 +286,6 @@ The output has <b>one value per scale</b> (the signal averaged over k consecutiv
     ],
     network: [['Dancer A — hip x', 'Merge CHOP', 'Trail CHOP — 4 s', 'EW Phase Locking Value'], ['Dancer B — hip x', 'Merge CHOP']],
     recipe: ['Merge one oscillating signal per performer.', 'Trail a few periods and wire into <b>EW AP Phase Locking Value</b>.', 'Turn on the band-pass to focus on the sway frequency.'],
-    checks: ['Two LFO CHOPs at the same frequency: ≈ 1. Different frequencies: lower.'],
     related: ['time-window-synchronizer', 'event-synchronization'],
   },
   {
@@ -316,7 +295,6 @@ The output has <b>one value per scale</b> (the signal averaged over k consecutiv
     label: 'EW AP Rarity',
     layer: 'AP',
     kind: 'stream',
-    state: 'to-check',
     sourceDesc: 'Stream: a live source. The output is always <b>one sample</b>: the rarity of the newest sample (a source can give 1 or 2 samples in a frame, all of them feed the memory). Clip: a recording, one value for every sample, the memory starting afresh at every cook.',
     tagline: 'How unusual is the movement of the last moments compared with the recent past?',
     about: `Flags the <b>new gestures</b>. At every sample it takes the last <em>Pattern</em> seconds of the signal as a pattern and compares it with the patterns of the last <em>Memory</em> seconds. If something similar happened recently the value is about <b>1</b>; if nothing like it did, the value is larger (3 and above is a clear novelty). It works on <b>any signal</b>: a scalar (a speed, an energy), a position, several features together.
@@ -352,13 +330,6 @@ Unlike the EyesWeb Rarity (a bin of the <em>current level</em> of the signal), i
       'Wait for the warm-up (about 1.75 s with the defaults). Then read <code>rarity</code>: about 1 while the movement is familiar.',
       'Fire an event when it crosses 3: a Logic CHOP (greater than 3) into a Trigger CHOP or a Count CHOP.',
     ],
-    checks: [
-      'A steady LFO CHOP: after a few periods the value stays around or below 1.',
-      'Hold still for half a second in the middle of the oscillation, or change its amplitude or its frequency: the value jumps above 3, then falls back as the new movement fills the memory.',
-      'Repeat the new movement: the second time it is much less rare.',
-      'With a position: move the whole gesture somewhere else. <em>Values</em> flags it; <em>shape</em> does not.',
-      'On the Qualisys recording trial5 (left wrist, 50 Hz): shape on x, y, z gives events at about 5.4 s (the first arm movement) and 25.7 s (arms straight up, hands together, after the lateral raises).',
-    ],
     notes: [
       'It measures how new the <b>movement</b> is, not how rare the <em>current level</em> of the signal is (that is what the two methods of PyEyesWeb do).',
       'A perfectly regular signal makes its own typical distance tiny, so even small changes stand out: add a little noise tolerance by raising Neighbours, or smooth the input.',
@@ -373,7 +344,6 @@ Unlike the EyesWeb Rarity (a bin of the <em>current level</em> of the signal), i
     label: 'EW AP Sample Entropy',
     layer: 'AP',
     kind: 'frame',
-    state: 'to-check',
     tagline: 'How predictable a signal is.',
     about: `Counts how often patterns of length m that are similar (within tolerance r) remain similar at length m + 1, and gives <b>one number</b>, SampEn(m, r) as in Richman &amp; Moorman (2000), with m = 2 by default.
 
@@ -398,7 +368,6 @@ How to read it: <b>0</b> = perfectly predictable (a clean sine); about <b>1 – 
     ],
     network: [['EW Kinetic Energy', 'Trail CHOP — 5 s', 'EW Sample Entropy', 'Null CHOP']],
     recipe: ['Trail one scalar for a few seconds (at least 100–200 samples).', 'Wire into <b>EW AP Sample Entropy</b>: Embedding Dimension 2, Relative Tolerance 0.2.', 'Compare the value between gestures.'],
-    checks: ['A sine: low. Noise CHOP: high.'],
     related: ['multi-scale-entropy'],
   },
   {
@@ -408,7 +377,6 @@ How to read it: <b>0</b> = perfectly predictable (a clean sine); about <b>1 – 
     label: 'EW AP Scalar Peak Detector',
     layer: 'AP',
     kind: 'stream',
-    state: 'verified',
     tagline: 'Fires a pulse on every peak of a signal.',
     about: `Watches a stream through a sliding window and outputs 1 on the sample where a peak above Threshold is found. Turns a continuous signal (speed, energy) into events: accents, steps, hits. Feeds <a href="binary-pulses-regularity">Binary Pulses Regularity</a> and the event synchronisation operators.`,
     inputs: [
@@ -429,7 +397,6 @@ How to read it: <b>0</b> = perfectly predictable (a clean sine); about <b>1 – 
     ],
     network: [['EW Kinematics — velocity', 'EW Scalar Peak Detector', 'Trigger CHOP', 'Audio File In CHOP — cue']],
     recipe: ['Wire a speed or energy signal into <b>EW AP Scalar Peak Detector</b>.', 'Use is_peak with a Trigger or Count CHOP.'],
-    checks: ['An LFO CHOP: one pulse per period.', 'Raise Threshold: small peaks disappear.'],
     notes: [
       'A peak is a switch from rising to falling: within the window the maximum comes <b>before</b> the minimum after the signal was rising. So it is reported with a <b>delay</b> of up to about Window samples after the real maximum (a longer Window = a later, but steadier, trigger).',
       'A live source can give 2 samples in a frame, and the pulse can sit on the first of them. Read is_peak with a <b>Count</b> or <b>Trigger CHOP</b>, which see every sample, not with an expression that reads one sample.',

@@ -47,7 +47,7 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
             <div class="side-title"><span class="sw"></span>{layer} · {layerInfo[layer].name}</div>
             {byLayer(layer).map((op) => (
               <a href={`${base}operators/${op.slug}`} data-name={op.title.toLowerCase()} aria-current={current === op.slug ? 'page' : undefined}>
-                {op.title}<span class={`dot ${op.state ?? ''}`} title={op.state}></span>
+                {op.title}
               </a>
             ))}
           </div>

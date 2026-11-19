@@ -12,11 +12,12 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
 
   <h2><span class="num">01</span>Install</h2>
   <ol class="recipe">
-    <li>Download <code>EyesWebTD-&lt;version&gt;-win64.zip</code> and unzip it. The DLLs are flat in <code>Plugins/</code> (one DLL per operator).</li>
-    <li>Copy them into <code>Documents/Derivative/Plugins</code> (all projects) or into a <code>Plugins</code> folder next to your <code>.toe</code> (this project only).</li>
+    <li>Download the package for your system from the <a href="https://github.com/InfoMusCP/EyesWebTD/releases">releases page</a>: <code>EyesWebTD-&lt;version&gt;-win64.zip</code> (Windows, 64-bit) or <code>EyesWebTD-&lt;version&gt;-macos-universal.zip</code> (macOS 11 or later, Apple silicon and Intel). Unzip it: the operators are flat in <code>Plugins/</code>, one per operator (<code>.dll</code> files on Windows, <code>.plugin</code> bundles on macOS).</li>
+    <li>Copy them into a <code>Plugins</code> folder next to your <code>.toe</code> (this project only) or, for all projects, into <code>Documents\Derivative\Plugins</code> on Windows or <code>~/Library/Application Support/Derivative/TouchDesigner099/Plugins</code> on macOS (create the folder if it is missing).</li>
+    <li><b>macOS only:</b> the bundles are not signed by Apple, so macOS blocks them after a download. Run once in Terminal, with the folder where you copied them:<br /><code>xattr -dr com.apple.quarantine ~/Library/Application\ Support/Derivative/TouchDesigner099/Plugins</code></li>
     <li>Restart TouchDesigner. When asked, allow the custom operators to load.</li>
   </ol>
-  <div class="callout">Windows 64-bit, TouchDesigner 2025.32280 or later. macOS comes later. An old DLL of the same operator in another Plugins folder wins over the new one: remove it.</div>
+  <div class="callout">TouchDesigner 2025.32280 or later, on Windows 64-bit or macOS 11+. Updating: delete the old EyesWeb files from the Plugins folder first; an old operator in another Plugins folder wins over the new one.</div>
 
   <h2><span class="num">02</span>Create an operator</h2>
   <p>Open the OP Create dialog (<kbd>Tab</kbd>), go to <b>CHOP → Custom</b>: every operator is listed as <code>EW L1 …</code>, <code>EW L2 …</code>, <code>EW L4 …</code> or <code>EW AP …</code>. The prefix is its <a href={`${base}concepts#layers`}>layer</a>.</p>
@@ -50,6 +51,6 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
   <div class="grid">
     <a class="card L2" href={`${base}operators/kinematics`}><div class="top"><span>L2</span></div><h3>Kinematics</h3><p>Velocity, acceleration, jerk and curvature: the input of many other operators.</p></a>
     <a class="card AP" href={`${base}concepts`}><div class="top"><span>Guide</span></div><h3>Concepts</h3><p>Windows, streams, clips, layouts: how every operator reads its input.</p></a>
-    <a class="card L1" href={base}><div class="top"><span>Catalog</span></div><h3>All operators</h3><p>Filter by layer, purpose, and what still needs testing.</p></a>
+    <a class="card L1" href={base}><div class="top"><span>Catalog</span></div><h3>All operators</h3><p>Filter by layer, by analysis, or by name.</p></a>
   </div>
 </Base>

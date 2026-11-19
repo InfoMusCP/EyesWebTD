@@ -14,7 +14,6 @@ export const l2: Operator[] = [
     label: 'EW L2 Bounding Box Filled Area',
     layer: 'L2',
     kind: 'sample',
-    state: 'verified',
     tagline: 'How much of its bounding box the body fills: a 3D contraction index.',
     about: `Takes the joints of a body as a point cloud and compares the surface of their 3D convex hull with the surface of their axis-aligned bounding box. A body curled up fills its box; a body with limbs spread out leaves it mostly empty.
 
@@ -40,10 +39,6 @@ It is the classic EyesWeb <em>contraction index</em>: low values = expansion, hi
       'Wire into <b>EW L2 Bounding Box Filled Area</b>. Source = Stream for live data, Clip for a recorded clip.',
       'Smooth the output (Filter / Lag CHOP) and map it to a visual parameter.',
     ],
-    checks: [
-      'Open arms wide: the value drops. Crouch: it rises.',
-      'Remove joints until fewer than 4 remain: INVALID_INPUT.',
-    ],
     related: ['points-density', 'ellipsoid-sphericity'],
   },
   {
@@ -53,7 +48,6 @@ It is the classic EyesWeb <em>contraction index</em>: low values = expansion, hi
     label: 'EW L2 Curvature Velocity Correlation',
     layer: 'L2',
     kind: 'buffer',
-    state: 'watch',
     tagline: 'Smoothness from the two-thirds power law: does speed slow down in the curves?',
     about: `Natural human movement slows down where the path bends (the two-thirds power law). This operator computes curvature and speed of a trajectory with Savitzky–Golay filters and relates their logarithms: a fluid movement follows the law closely.
 
@@ -92,15 +86,7 @@ It is the classic EyesWeb <em>contraction index</em>: low values = expansion, hi
       'Wire into <b>EW L2 Curvature Velocity Correlation</b>; wait one cook for the filters.',
       'Draw circles and figure-eights in the air: fluid drawing raises the Simplified index.',
     ],
-    checks: [
-      'With Pearson, a natural drawing movement gives a negative value (as the power law predicts).',
-      'Hold still: INVALID_INPUT (nothing to correlate).',
-      'Change Filter Window: WARMING_UP for one cook.',
-    ],
-    notes: [
-      'Tested: works; only negative values with Pearson, consistent with the power law.',
-      'Under review for the first release: Kinematics already outputs curvature and velocity, so the correlation could be computed downstream.',
-    ],
+    notes: ['With Pearson, expect negative values on real movement: curvature and speed vary in opposite directions (the two-thirds power law).'],
     related: ['kinematics', 'spectral-arc-length', 'log-dimensionless-jerk'],
   },
   {
@@ -110,7 +96,6 @@ It is the classic EyesWeb <em>contraction index</em>: low values = expansion, hi
     label: 'EW L2 Direction Change',
     layer: 'L2',
     kind: 'frame',
-    state: 'verified',
     tagline: 'Sharp right-angle turns of a path, and the area it sweeps.',
     about: `Two measures of the path of one point over a window.
 
@@ -146,10 +131,6 @@ It is the classic EyesWeb <em>contraction index</em>: low values = expansion, hi
       'Wire into <b>EW L2 Direction Change</b>.',
       'Trigger events when <code>cosine</code> exceeds a threshold; map <code>polygon</code> to size or spread.',
     ],
-    checks: [
-      'Draw an L: cosine ≈ 1 at the corner. A straight line: 0.',
-      'Draw a large circle: polygon grows with its radius (squared).',
-    ],
     related: ['directness', 'kinematics'],
   },
   {
@@ -159,7 +140,6 @@ It is the classic EyesWeb <em>contraction index</em>: low values = expansion, hi
     label: 'EW L2 Directness',
     layer: 'L2',
     kind: 'frame',
-    state: 'verified',
     tagline: 'Straight or wandering? Distance travelled vs ground covered.',
     about: `Ratio between the straight-line distance from the oldest to the newest point of the window and the length of the path actually travelled. 1 is a perfectly direct movement; values near 0 are meandering or back-and-forth movements.`,
     formula: 'directness = |p_newest − p_oldest| / Σ |p_i+1 − p_i|',
@@ -181,7 +161,6 @@ It is the classic EyesWeb <em>contraction index</em>: low values = expansion, hi
       'Select a joint and keep a window with a Trail CHOP (try 1 s).',
       'Wire into <b>EW L2 Directness</b> and smooth the output.',
     ],
-    checks: ['A straight swipe gives ≈ 1. A zig-zag in place gives values near 0.'],
     related: ['direction-change', 'trajectory-non-planarity'],
   },
   {
@@ -191,7 +170,6 @@ It is the classic EyesWeb <em>contraction index</em>: low values = expansion, hi
     label: 'EW L2 Ellipsoid Sphericity',
     layer: 'L2',
     kind: 'sample',
-    state: 'verified',
     tagline: 'How round the body volume is: Wadell sphericity of the best-fit ellipsoid.',
     about: `Fits an ellipsoid to the joints of the body (PCA) and measures how close it is to a sphere: 1 for a sphere, lower for an elongated or flat shape. A standing body is elongated; a crouched, compact body is rounder.
 
@@ -221,8 +199,6 @@ In <em>sizes</em> mode, give the three axes yourself and only the sphericity is 
       'Select the joints (joint-major x, y, z).',
       'Wire into <b>EW L2 Ellipsoid Sphericity</b> with Input Mode = points.',
     ],
-    checks: ['Standing straight: low sphericity. Curled up: higher.', 'radii0 ≥ radii1 ≥ radii2 always.'],
-    notes: ['Fixed: the Source parameter (stream / clip), EyesWebTD bb64276.'],
     related: ['bounding-box-filled-area', 'points-density'],
   },
   {
@@ -232,7 +208,6 @@ In <em>sizes</em> mode, give the three axes yourself and only the sphericity is 
     label: 'EW L2 Equilibrium',
     layer: 'L2',
     kind: 'sample',
-    state: 'to-check',
     tagline: 'Is the barycenter inside the support of the feet?',
     about: `Builds an elliptical support region between the two feet on the floor plane (major axis from foot to foot, enlarged by Margin) and measures where the barycenter falls in it: 1 when it is exactly in the centre, falling to 0 at the border and outside. Also outputs the direction of the foot-to-foot vector.`,
     formula: 'a = d/2 + m · b = m · w_y · E = 1 − √((x′/a)² + (y′/b)²), 0 outside',
@@ -261,7 +236,6 @@ In <em>sizes</em> mode, give the three axes yourself and only the sphericity is 
       'Merge in the order lf_x, lf_y, rf_x, rf_y, bary_x, bary_y and wire into <b>EW L2 Equilibrium</b>.',
       'Adjust Margin to the unit of your data (metres: 0.1; normalised 0–1 image: smaller).',
     ],
-    checks: ['Stand centred: ≈ 1. Lean over one foot: it drops toward 0.', 'Turn on the spot: angle follows.'],
     notes: ['With normalised MediaPipe image coordinates there is no floor plane; use world landmarks.'],
     related: ['points-density'],
   },
@@ -272,7 +246,6 @@ In <em>sizes</em> mode, give the three axes yourself and only the sphericity is 
     label: 'EW L2 Kinematics',
     layer: 'L2',
     kind: 'stream',
-    state: 'to-check',
     tagline: 'Smoothed velocity, acceleration, jerk, curvature and direction of a moving point.',
     about: `The workhorse of the library. Feeds a point sample after sample through Savitzky–Golay filters and outputs its derivatives: speed, acceleration, jerk, path curvature, direction of motion and the smoothed position.
 
@@ -314,12 +287,6 @@ In <em>sizes</em> mode, give the three axes yourself and only the sphericity is 
       'Turn on the quantities you need. Leave Source = Stream for a live input.',
       'Use <code>velocity</code> directly for mapping, or trail it as the speed profile of the smoothness operators.',
     ],
-    checks: [
-      'Hold still: velocity ≈ 0. Shake: it spikes.',
-      'Switch to Components: velocity_x/y/z appear.',
-      'Press Reset: Info CHOP <code>resets</code> increments.',
-      'Clip mode on a recorded Trail: the output has the length of the clip.',
-    ],
     related: ['kinetic-energy', 'spectral-arc-length', 'log-dimensionless-jerk', 'submovement-count'],
   },
   {
@@ -329,7 +296,6 @@ In <em>sizes</em> mode, give the three axes yourself and only the sphericity is 
     label: 'EW L2 Kinetic Energy',
     layer: 'L2',
     kind: 'stream',
-    state: 'to-check',
     tagline: 'Overall quantity of motion of the body: weighted sum of joint speeds squared.',
     about: `The total kinetic energy of a set of joints, ½ Σ mᵢ vᵢ². It is the simplest, most robust "how much is the body moving" signal: great for driving intensity, particle emission, sound level.
 
@@ -359,7 +325,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
       'Smooth with a Lag CHOP and remap with a Math CHOP.',
       'Set Reference Joint to the pelvis to measure gesture energy only, not walking.',
     ],
-    checks: ['Still: ≈ 0. Jump: large spike.', 'Weights: setting one joint to 0 removes its contribution.'],
     related: ['kinematics', 'points-density'],
   },
   {
@@ -369,7 +334,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     label: 'EW L2 Log Dimensionless Jerk',
     layer: 'L2',
     kind: 'frame',
-    state: 'verified',
     tagline: 'Smoothness of a speed profile from its jerk (LDLJ).',
     about: `A standard smoothness metric from motor control: integrates the squared jerk over the movement, normalises by duration and peak speed, and takes the negative logarithm. Values closer to 0 are smoother; more negative values are jerkier.`,
     formula: 'LDLJ = −ln( (T³ / v_peak²) ∫ |d²v/dt²|² dt )',
@@ -392,8 +356,7 @@ In <em>position</em> mode (default) the operator differentiates positions itself
       'Keep a window with a Trail CHOP matching one gesture (1–2 s).',
       'Wire into <b>EW L2 Log Dimensionless Jerk</b>.',
     ],
-    checks: ['A slow, single reach gives values nearer 0 than a shaky one.'],
-    notes: ['Tested live with MediaPipe: oscillates between −12 and −16. Probably tracking jitter plus a sliding window that does not cut whole gestures.'],
+    notes: ['On a live MediaPipe pose the value moves around (e.g. between −12 and −16): tracking jitter adds jerk, and a sliding Trail cuts gestures at arbitrary points. Smooth the input and compare values over whole gestures rather than reading single values.'],
     related: ['spectral-arc-length', 'submovement-count', 'kinematics'],
   },
   {
@@ -403,7 +366,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     label: 'EW L2 Points Density',
     layer: 'L2',
     kind: 'sample',
-    state: 'verified',
     tagline: 'Centroid of the body and how spread its joints are around it.',
     about: `Computes the centroid of a set of points and the dispersion of the points around it (mean, median, max or sum of the distances). Low density value = compact body; high = spread out. In Components mode the dispersion is given per axis.`,
     inputs: [
@@ -428,7 +390,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     ],
     network: [['MediaPipe COMP', 'Select CHOP — joints', 'EW Points Density', 'Select CHOP — density', 'Null CHOP']],
     recipe: ['Select joints joint-major and wire into <b>EW L2 Points Density</b>.', 'Use centroid as a stable body position, density as expansion.'],
-    checks: ['Arms open: density up. Arms close to the body: down.'],
     related: ['bounding-box-filled-area', 'ellipsoid-sphericity'],
   },
   {
@@ -438,7 +399,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     label: 'EW L2 Spectral Arc Length',
     layer: 'L2',
     kind: 'frame',
-    state: 'verified',
     tagline: 'Smoothness from the shape of the speed spectrum (SPARC).',
     about: `SPARC measures the arc length of the normalised amplitude spectrum of a speed profile: a smooth movement has a compact, simple spectrum (short arc, value near 0); a jerky one has a long, ragged spectrum (more negative). More robust to noise than jerk-based metrics.`,
     inputs: [SPEED_IN],
@@ -458,8 +418,7 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     ],
     network: [['EW Kinematics — velocity', 'Trail CHOP — 1–2 s', 'EW Spectral Arc Length', 'Null CHOP']],
     recipe: ['Trail the <code>velocity</code> of Kinematics over one gesture.', 'Wire into <b>EW L2 Spectral Arc Length</b>.'],
-    checks: ['Hold still: INVALID_INPUT (all-zero profile).', 'Smooth reach vs shaky reach: the shaky one is more negative.'],
-    notes: ['Tested live with MediaPipe: oscillates between −1 and −4; same likely cause as LDLJ.'],
+    notes: ['On a live MediaPipe pose the value moves around (e.g. between −1 and −4), for the same reasons as <a href="log-dimensionless-jerk">Log Dimensionless Jerk</a>: smooth the input and compare whole gestures.'],
     related: ['log-dimensionless-jerk', 'submovement-count', 'kinematics'],
   },
   {
@@ -469,7 +428,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     label: 'EW L2 Submovement Count',
     layer: 'L2',
     kind: 'frame',
-    state: 'to-check',
     tagline: 'How many separate "pushes" a movement is made of.',
     about: `Counts the prominent peaks of a speed profile. A single smooth reach has one peak; a hesitant or corrected movement has several. A peak counts when its prominence exceeds Prominence Factor × the maximum speed.`,
     inputs: [SPEED_IN],
@@ -487,7 +445,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     ],
     network: [['EW Kinematics — velocity', 'Trail CHOP — 2 s', 'EW Submovement Count', 'Null CHOP']],
     recipe: ['Trail the Kinematics velocity over a few seconds.', 'Wire into <b>EW L2 Submovement Count</b>.'],
-    checks: ['Three distinct taps in the window: 3.', 'Raise Prominence Factor: small bumps stop counting.'],
     related: ['spectral-arc-length', 'log-dimensionless-jerk', 'scalar-peak-detector'],
   },
   {
@@ -497,7 +454,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     label: 'EW L2 Symmetry',
     layer: 'L2',
     kind: 'sample',
-    state: 'to-check',
     tagline: 'Left–right mirror symmetry of joint pairs.',
     about: `<b>Reflection</b> (default): for each pair of joints (e.g. left and right wrist) reflects one across the body's centre and measures how close it lands to the other: one score per pair, 1 = perfectly symmetric.
 
@@ -532,7 +488,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
       'Select joints joint-major. Note the index of each joint (MediaPipe: 15/16 wrists, 13/14 elbows, 11/12 shoulders).',
       'Wire into <b>EW L2 Symmetry</b> and type the pairs, e.g. <code>15,16 13,14</code>.',
     ],
-    checks: ['Both arms raised equally: scores near 1. One arm only: drops.', 'Changing Pairs renames the channels.'],
     related: ['triangle-symmetry'],
   },
   {
@@ -542,7 +497,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     label: 'EW L2 Trajectory Non-Planarity',
     layer: 'L2',
     kind: 'frame',
-    state: 'to-check',
     tagline: 'Does a 3D gesture stay on a plane, or twist out of it?',
     about: `Fits local planes over neighbourhoods of size Radius along a 3D path and averages the distance of the points from them. A circle or a swing stays in a plane (0); a spiral or a twisting gesture leaves it (larger value, in the unit of the data).`,
     inputs: [
@@ -562,7 +516,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     ],
     network: [['Mocap CHOP — wrist x,y,z', 'Trail CHOP — 2 s', 'EW Trajectory Non-Planarity', 'Null CHOP']],
     recipe: ['Trail a 3D joint over 1–2 s.', 'Wire into <b>EW L2 Trajectory Non-Planarity</b>; set Radius to a fraction of the gesture size.'],
-    checks: ['A circle drawn flat in front of you: ≈ 0. A corkscrew: > 0.', 'Radius too small: INVALID_INPUT.'],
     notes: ['Needs real 3D data (world coordinates), not 2D image coordinates.'],
     related: ['directness', 'direction-change'],
   },
@@ -573,7 +526,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     label: 'EW L2 Triangle Symmetry',
     layer: 'L2',
     kind: 'sample',
-    state: 'to-check',
     tagline: 'Asymmetry of the triangle head – left hand – right hand.',
     about: `Three 2D points form a triangle (typically head on top, hands at the sides). <b>Area</b> (EyesWeb) returns a symmetry index (1 = symmetric). <b>Horizontal / Vertical / Spatial</b> are the asymmetry indices of Glowinski et al. 2011 (0 = symmetric).`,
     inputs: [
@@ -595,7 +547,6 @@ In <em>position</em> mode (default) the operator differentiates positions itself
     ],
     network: [['MediaPipe COMP', 'Select CHOP — nose, wrists x,y', 'EW Triangle Symmetry', 'Null CHOP']],
     recipe: ['Select head (nose), left wrist and right wrist x, y — in that order.', 'Wire into <b>EW L2 Triangle Symmetry</b>.'],
-    checks: ['Hands at the same height and distance: area ≈ 1, asymmetries ≈ 0.'],
     related: ['symmetry'],
   },
 ];

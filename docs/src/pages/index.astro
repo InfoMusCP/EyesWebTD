@@ -4,7 +4,6 @@ import NetworkDiagram from '../components/NetworkDiagram.astro';
 import { operators, layerOrder, byLayer, tagOrder } from '../data/index';
 import { layerInfo, kindInfo, tagInfo } from '../data/types';
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
-const count = (s: string) => operators.filter((o) => o.state === s).length;
 ---
 <Base title="Catalog" section="catalog">
   <section class="home-hero">
@@ -21,7 +20,6 @@ const count = (s: string) => operators.filter((o) => o.state === s).length;
     {layerOrder.map((l) => (
       <div class={`stat ${l}`}><b>{byLayer(l).length}</b><span>{l} · {layerInfo[l].name}</span></div>
     ))}
-    <div class="stat" style="--layer: var(--ok)"><b>{count('verified')}</b><span>verified in TD</span></div>
   </div>
 
   <NetworkDiagram
@@ -36,7 +34,6 @@ const count = (s: string) => operators.filter((o) => o.state === s).length;
   <div class="filters" id="filters">
     <button aria-pressed="true" data-f="all">All</button>
     {layerOrder.map((l) => <button class={l} aria-pressed="false" data-f={l}>{l}</button>)}
-    <button aria-pressed="false" data-f="to-check" style="--layer: var(--warm)">to check</button>
     <input type="search" id="q" placeholder="Filter by name or purpose…" />
   </div>
   <div class="filters tagfilters" id="tagfilters" aria-label="Analysis tags">
@@ -50,8 +47,8 @@ const count = (s: string) => operators.filter((o) => o.state === s).length;
       <p class="muted">{layerInfo[l].desc}</p>
       <div class="grid">
         {byLayer(l).map((op) => (
-          <a class={`card ${op.layer}`} href={`${base}operators/${op.slug}`} data-text={`${op.title} ${op.tagline}`.toLowerCase()} data-state={op.state} data-tags={(op.tags ?? []).join(' ')}>
-            <div class="top"><span>{op.opType}</span><span class={`dot ${op.state ?? ''}`} title={op.state}></span></div>
+          <a class={`card ${op.layer}`} href={`${base}operators/${op.slug}`} data-text={`${op.title} ${op.tagline}`.toLowerCase()} data-tags={(op.tags ?? []).join(' ')}>
+            <div class="top"><span>{op.opType}</span></div>
             <h3>{op.title}</h3>
             <p>{op.tagline}</p>
             <div class="foot">
@@ -66,12 +63,6 @@ const count = (s: string) => operators.filter((o) => o.state === s).length;
     </section>
   ))}
 
-  <p class="muted" style="margin-top:3rem;font-size:.88rem">
-    <span class="dot verified" style="display:inline-block"></span> verified in TouchDesigner ·
-    <span class="dot to-check" style="display:inline-block"></span> to check ·
-    <span class="dot watch" style="display:inline-block"></span> under review for the first release
-  </p>
-
   <script is:inline>
     (function () {
       var f = 'all', q = '', tag = '';
@@ -81,7 +72,7 @@ const count = (s: string) => operators.filter((o) => o.state === s).length;
         document.querySelectorAll('.layer-block').forEach(function (sec) {
           var visible = 0;
           sec.querySelectorAll('.card').forEach(function (c) {
-            var ok = (f === 'all' || f === sec.dataset.layer || (f === 'to-check' && c.dataset.state !== 'verified')) && (!q || c.dataset.text.indexOf(q) >= 0) && (!tag || (' ' + c.dataset.tags + ' ').indexOf(' ' + tag + ' ') >= 0);
+            var ok = (f === 'all' || f === sec.dataset.layer) && (!q || c.dataset.text.indexOf(q) >= 0) && (!tag || (' ' + c.dataset.tags + ' ').indexOf(' ' + tag + ' ') >= 0);
             c.style.display = ok ? '' : 'none';
             if (ok) visible++;
           });

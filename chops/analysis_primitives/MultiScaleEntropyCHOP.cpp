@@ -34,7 +34,7 @@ public:
         p.integer("Embeddingdimension", "Embedding Dimension", 2, Range::atLeast(1, 5));
         p.number("Tolerance", "Tolerance", 0.15, Range::atLeast(0.0001, 0.99).withSlider(0.01, 0.99));
         p.integer("Maxscale", "Max Scale", 6, Range::atLeast(1, 20));
-        p.integer("Minimumpoints", "Minimum Points", 30, Range::atLeast(5, 1000).withSlider(10, 1000));  // lowered default for live testing
+        p.integer("Minimumpoints", "Minimum Points", 30, Range::atLeast(5, 1000).withSlider(10, 1000));  // 30, not 500 as in PyEyesWeb: short live windows give a value
     }
 
     void cook(CHOP_Output* out, const OP_Inputs* in) override {

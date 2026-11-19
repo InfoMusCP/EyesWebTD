@@ -91,20 +91,16 @@ export interface Operator {
   network: string[][];
   /** Step-by-step recipe to build the network */
   recipe: string[];
-  /** What to verify when testing the operator */
-  checks: string[];
   /** Caveats, known issues, open questions */
   notes?: string[];
   related?: string[];
-  /** Release state while testing */
-  state?: 'verified' | 'to-check' | 'watch';
   references?: string[];
 }
 
 export const layerInfo: Record<Layer, { name: string; short: string; desc: string }> = {
   L1: { name: 'Physical signals', short: 'L1', desc: 'From sensors and images to clean, synchronised signals: grids, silhouettes, time windows.' },
   L2: { name: 'Low-level features', short: 'L2', desc: 'Instant descriptors of one body or one trajectory: kinematics, energy, symmetry, smoothness, shape.' },
-  L3: { name: 'Mid-level features', short: 'L3', desc: 'Features over gestures and movement units. None in the first release.' },
+  L3: { name: 'Mid-level features', short: 'L3', desc: 'Features over gestures and movement units. None in this release.' },
   L4: { name: 'High-level features', short: 'L4', desc: 'Expressive and social qualities, e.g. who leads a group.' },
   AP: { name: 'Analysis primitives', short: 'AP', desc: 'Signal tools usable at any layer: entropy, recurrence, synchronisation, periodicity, peaks.' },
 };

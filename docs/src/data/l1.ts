@@ -8,7 +8,6 @@ export const l1: Operator[] = [
     label: 'EW L1 Hit Cell Detector',
     layer: 'L1',
     kind: 'sample',
-    state: 'verified',
     sourceDesc: 'Stream: a live source. The output is always <b>one sample</b>: the cell of the newest point (a source can give 1 or 2 points in a frame, only the newest counts). Clip: a recording, one cell for every point.',
     tagline: 'Which cell of a 2D grid each point falls in.',
     about: `Divides a rectangular area into a uniform grid of <code>Cells Along X × Cells Along Y</code> cells and tells, for every point, the row and column of the cell it hits.
@@ -46,11 +45,6 @@ Use it to turn a hand, a centroid or a blob position into a discrete zone: trigg
       'Set Cells Along X / Y to your grid (e.g. 4 × 4) and the area to the range of your coordinates.',
       'Combine the output into one index with a Math CHOP (<code>row * cols + col</code>) to drive a Switch or a sample trigger.',
     ],
-    checks: [
-      'Move the point to the four corners: row and col reach 0 and N − 1.',
-      'Is y = 0 at the top or the bottom in your source? Check that row 0 is where you expect it.',
-      'Turn Clip Values off and leave the area: status becomes INVALID_INPUT and both outputs go to −1.',
-    ],
     related: ['silhouette-centroids', 'points-density'],
   },
   {
@@ -60,7 +54,6 @@ Use it to turn a hand, a centroid or a blob position into a discrete zone: trigg
     label: 'EW L1 Silhouette Body Parts',
     layer: 'L1',
     kind: 'frame',
-    state: 'verified',
     tagline: 'Bounding boxes of head, trunk, arms and legs from a silhouette mask.',
     about: `Splits a human silhouette into six regions (left leg, right leg, trunk, left arm, right arm, head) from its horizontal and vertical projection histograms, and returns the bounding box of each region in pixels.
 
@@ -100,12 +93,6 @@ It works on a <b>binary mask</b>, not on a colour video: key the body first (bac
       'Select <code>regions_head_*</code> to draw a box on the head, or use <code>is_found_*</code> as gates.',
       '<b>Flip y for TouchDesigner</b>: Select CHOP <code>regions_*_y</code> → Math CHOP, <em>Range</em> page: From Range <code>0</code> … <code>op("mask").height - 1</code>, To Range <code>op("mask").height - 1</code> … <code>0</code>. Merge it back with the x channels. Subtract each box height after the flip to get its bottom edge.',
     ],
-    checks: [
-      'Stand in T-pose: all six <code>is_found</code> should be 1.',
-      'Swap sides: is <code>left_arm</code> the arm on the left of the image?',
-      'Feed an empty (black) mask: INVALID_INPUT and all zeros.',
-      'Measure the cook time at full HD vs a reduced resolution.',
-    ],
     notes: ['Silhouette operators need a real mask TOP, not a colour video.', 'The GPU readback costs ~20 ms at 1920×1088: downscale the mask.'],
     related: ['silhouette-centroids'],
   },
@@ -116,7 +103,6 @@ It works on a <b>binary mask</b>, not on a colour video: key the body first (bac
     label: 'EW L1 Silhouette Centroids',
     layer: 'L1',
     kind: 'buffer',
-    state: 'verified',
     tagline: 'Centre of gravity, head, hands, elbows, knees and feet of a silhouette — no skeleton tracker needed.',
     about: `Finds up to 14 hierarchical centroids of a human silhouette (centre of gravity, head, shoulders, elbows, forearms, hands, knees, feet) from a binary mask, in pixels. To get coordinates in 0–1, divide by the width and height of the mask after the operator.
 
@@ -152,12 +138,6 @@ A light alternative to a pose tracker when you already have a mask (a Kinect bod
       '<b>Flip y for TouchDesigner</b>: Select CHOP <code>centroids_*_y</code> → Math CHOP, <em>Range</em> page: From Range <code>0</code> … <code>op("mask").height - 1</code>, To Range <code>op("mask").height - 1</code> … <code>0</code>. Merge it back with the x channels.',
       'Feed <code>centroids_center_of_gravity_*</code> (pixels, or normalised as above) to Kinematics or Kinetic Energy for a mask-only movement pipeline.',
     ],
-    checks: [
-      'Compare <code>centroids_head</code> with where the head is in the image.',
-      'Raise one arm: does the right hand centroid follow the arm on the right of the image?',
-      'Toggle Filter Centroids: movement should become smoother and lag a little; Reset clears the filter.',
-      'Switch off a part: its channels become NaN.',
-    ],
     related: ['silhouette-body-parts', 'kinematics'],
   },
   {
@@ -167,7 +147,6 @@ A light alternative to a pose tracker when you already have a mask (a Kinect bod
     label: 'EW L1 Time Window Synchronizer',
     layer: 'L1',
     kind: 'buffer',
-    state: 'to-check',
     tagline: 'Re-cuts one or two streams at different rates into aligned windows of the same duration.',
     about: `Two sensors rarely agree: an IMU at 100 Hz, a pose tracker at 30 Hz, chunks of irregular size. This operator appends every chunk to its stream and cuts both streams into windows <code>[t, t + Window)</code> on a common clock, so that window <em>k</em> of input 0 and window <em>k</em> of input 1 cover the same time span.
 
@@ -198,11 +177,6 @@ Each cook outputs the newest complete window. Use it before any operator that co
       'Wire stream A to input 0 and stream B to input 1. Each must carry its real sample rate.',
       'Choose a Window long enough to hold at least one sample of the slowest stream (e.g. 1 s).',
       'Read the Info CHOP: <code>windows_popped</code> > 1 means windows are being dropped — enlarge Window.',
-    ],
-    checks: [
-      'Feed two Pattern CHOPs at different sample rates and verify both appear in the window.',
-      'Check that NO_OUTPUT appears before the first window is complete.',
-      'Change Window and confirm the buffers restart.',
     ],
     notes: ['Presentation timestamps of the chunks are not used: a CHOP has no per-chunk time.'],
     related: ['phase-locking-value', 'event-synchronization'],
