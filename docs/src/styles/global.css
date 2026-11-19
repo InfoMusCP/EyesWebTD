@@ -97,7 +97,7 @@ p { margin: 0 0 1rem; }
 .sidebar a:hover { color: var(--text); background: var(--panel); text-decoration: none; }
 .sidebar a[aria-current] { color: var(--text); background: var(--panel-2); box-shadow: inset 2px 0 0 var(--layer, var(--accent)); }
 
-main.content { padding: 2.2rem clamp(1rem, 4vw, 3.5rem) 6rem; max-width: 1080px; width: 100%; }
+main.content { padding: 2.2rem clamp(1rem, 4vw, 3.5rem) 6rem; max-width: 1240px; width: 100%; }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
@@ -200,7 +200,10 @@ ol.recipe li::before { content: counter(s, decimal-leading-zero); position: abso
 .pager .next { text-align: right; }
 
 .prose ul { padding-left: 1.2rem; } .prose li { margin: .3rem 0; }
-.kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: .9rem; }
+.kinds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; }
+@media (max-width: 700px) { .kinds { grid-template-columns: 1fr; } }
+/* The kind diagram is drawn 300 wide: let it shrink with its card instead of overflowing. */
+svg.kind-glyph { display: block; width: 100%; max-width: 300px; height: auto; }
 .kinds .panel h3 { margin: .6rem 0 .3rem; }
 .kinds .panel p { color: var(--muted); font-size: .92rem; margin: 0; }
 pre { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 1rem; overflow-x: auto; font: .86rem/1.55 var(--mono); }
